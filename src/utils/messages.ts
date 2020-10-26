@@ -1,4 +1,4 @@
-import { MessageCenter as MC } from '@holoflows/kit'
+import { MessageCenter as MC } from '@dimensiondev/holoflows-kit'
 import type { Profile, Group } from '../database'
 import Serialization from './type-transform/Serialization'
 import type { ProfileIdentifier, GroupIdentifier, PersonaIdentifier } from '../database/type'
@@ -11,9 +11,14 @@ export interface UpdateEvent<Data> {
 export interface CompositionEvent {
     readonly reason: 'timeline' | 'popup'
     readonly open: boolean
+    readonly content?: string
+    readonly options?: {
+        onlyMySelf?: boolean
+        shareToEveryOne?: boolean
+    }
 }
 
-interface MaskbookMessages {
+export interface MaskbookMessages {
     /** Used to polyfill window.close. */
     closeActiveTab: undefined
     /**
@@ -69,6 +74,11 @@ interface MaskbookMessages {
     }
     /** Permission updated */
     permissionUpdated: void
+    metamaskMessage: string
+    autoPasteFailed: {
+        text: string
+        image?: Blob
+    }
 }
 
 export class BatchedMessageCenter<T> extends MC<T> {

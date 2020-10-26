@@ -4,16 +4,17 @@ import { getUrl, downloadUrl, pasteImageToActiveElements, sleep } from '../../..
 import Services from '../../../extension/service'
 import { decodeArrayBuffer, encodeArrayBuffer } from '../../../utils/type-transform/String-ArrayBuffer'
 import { GrayscaleAlgorithm } from '@dimensiondev/stego-js/cjs/grayscale'
+import { MessageCenter } from '../../../utils/messages'
 
 export async function uploadToPostBoxFacebook(
     text: string,
     options: Parameters<SocialNetworkUI['taskUploadToPostBox']>[1],
 ) {
-    const { warningText, template = 'v2' } = options
+    const { autoPasteFailedRecover, relatedText, template = 'v2' } = options
     const { lastRecognizedIdentity } = getActivatedUI()
     const blankImage = await downloadUrl(
         getUrl(`${template === 'v2' ? '/image-payload' : '/wallet'}/payload-${template}.png`),
-    )
+    ).then((x) => x.arrayBuffer())
     const secretImage = new Uint8Array(
         decodeArrayBuffer(
             await Services.Steganography.encodeImage(new Uint8Array(blankImage), {
@@ -27,17 +28,13 @@ export async function uploadToPostBoxFacebook(
     )
     pasteImageToActiveElements(secretImage)
     await untilDocumentReady()
-    try {
-        // Need a better way to find whether the image is pasted into
-        // throw new Error('auto uploading is undefined')
-    } catch {
-        uploadFail()
-    }
+    // TODO: Need a better way to find whether the image is pasted into
+    uploadFail()
 
     async function uploadFail() {
-        console.warn('Image not uploaded to the post box')
-        if (confirm(warningText)) {
-            await Services.Steganography.downloadImage(secretImage)
+        if (autoPasteFailedRecover) {
+            const blob = new Blob([secretImage], { type: 'image/png' })
+            MessageCenter.emit('autoPasteFailed', { text: relatedText, image: blob })
         }
     }
 }
@@ -47,7 +44,7 @@ export async function uploadShuffleToPostBoxFacebook(
     seed: string,
     options: Parameters<SocialNetworkUI['taskUploadToPostBox']>[1],
 ) {
-    const { warningText } = options
+    const { autoPasteFailedRecover, relatedText } = options
     const shuffledImage = new Uint8Array(
         decodeArrayBuffer(
             await Services.ImageShuffle.shuffle(encodeArrayBuffer(image), {
@@ -68,9 +65,9 @@ export async function uploadShuffleToPostBoxFacebook(
     }
 
     async function uploadFail() {
-        console.warn('Image not uploaded to the post box')
-        if (confirm(warningText)) {
-            await Services.Steganography.downloadImage(shuffledImage)
+        if (autoPasteFailedRecover) {
+            const blob = new Blob([shuffledImage], { type: 'image/png' })
+            MessageCenter.emit('autoPasteFailed', { text: relatedText, image: blob })
         }
     }
 }

@@ -1,9 +1,10 @@
 import type { SocialNetworkUIInjections } from '../../../social-network/ui'
-import { injectKnownIdentityAtTwitter } from './injectKnownIdentity'
 import { injectPostDialogAtTwitter } from './injectPostDialog'
 import { injectPostDialogHintAtTwitter } from './injectPostDialogHint'
 import { injectPostInspectorAtTwitter } from './injectPostInspector'
 import { injectPostDialogIconAtTwitter } from './injectPostDialogIcon'
+import { injectPostReplacerAtTwitter } from './injectPostReplacer'
+import { injectPageInspectorDefault } from '../../../social-network/defaults/injectPageInspector'
 
 const injectPostBox = () => {
     injectPostDialogAtTwitter()
@@ -13,6 +14,7 @@ const injectPostBox = () => {
 
 export const twitterUIInjections: SocialNetworkUIInjections = {
     injectPostBox,
+    injectPostReplacer: injectPostReplacerAtTwitter,
     injectPostInspector: injectPostInspectorAtTwitter,
-    injectKnownIdentity: injectKnownIdentityAtTwitter,
+    injectPageInspector: injectPageInspectorDefault(),
 }

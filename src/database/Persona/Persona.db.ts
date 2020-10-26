@@ -19,6 +19,7 @@ import type {
     EC_Private_JsonWebKey,
 } from '../../modules/CryptoAlgorithm/interfaces/utils'
 import { CryptoKeyToJsonWebKey } from '../../utils/type-transform/CryptoKey-JsonWebKey'
+import { Flags } from '../../utils/flags'
 /**
  * Database structure:
  *
@@ -193,11 +194,9 @@ export async function queryPersonasWithPrivateKey(
     t = t || createTransaction(await db(), 'readonly')('personas', 'profiles')
     const records: PersonaRecord[] = []
     records.push(
-        // ? WKWebview bug https://bugs.webkit.org/show_bug.cgi?id=177350
-        ...(webpackEnv.target === 'WKWebview'
-            ? (await t.objectStore('personas').getAll()).filter((obj) => obj.hasPrivateKey === 'yes')
-            : await t.objectStore('personas').index('hasPrivateKey').getAll(IDBKeyRange.only('yes'))
-        ).map(personaRecordOutDB),
+        ...(await t.objectStore('personas').index('hasPrivateKey').getAll(IDBKeyRange.only('yes'))).map(
+            personaRecordOutDB,
+        ),
     )
     return records as PersonaRecordWithPrivateKey[]
 }
@@ -331,12 +330,8 @@ export async function queryProfilesDB(
     t = t || createTransaction(await db(), 'readonly')('profiles')
     const result: ProfileRecord[] = []
     if (typeof network === 'string') {
-        // ? WKWebview bug https://bugs.webkit.org/show_bug.cgi?id=177350
         result.push(
-            ...(webpackEnv.target === 'WKWebview'
-                ? (await t.objectStore('profiles').getAll()).filter((obj) => obj.network === network)
-                : await t.objectStore('profiles').index('network').getAll(IDBKeyRange.only(network))
-            ).map(profileOutDB),
+            ...(await t.objectStore('profiles').index('network').getAll(IDBKeyRange.only(network))).map(profileOutDB),
         )
     } else {
         for await (const each of t.objectStore('profiles').iterate()) {
@@ -350,7 +345,6 @@ export async function queryProfilesDB(
 const fuse = new Fuse([] as ProfileRecord[], {
     shouldSort: true,
     threshold: 0.45,
-    maxPatternLength: 32,
     minMatchCharLength: 1,
     keys: [
         { name: 'nickname', weight: 0.8 },
@@ -479,7 +473,6 @@ export async function attachProfileDB(
 
     await updatePersonaDB(persona, { linkedProfiles: 'merge', explicitUndefinedField: 'ignore' }, t)
     await updateProfileDB(profile, t)
-    MessageCenter.emit('identityUpdated', undefined)
 }
 
 /**

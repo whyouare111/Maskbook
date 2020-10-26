@@ -1,10 +1,11 @@
 import React from 'react'
-import type { DOMProxy } from '@holoflows/kit'
+import type { DOMProxy } from '@dimensiondev/holoflows-kit'
 import type { PostInfo } from '../PostInfo'
-import { renderInShadowRoot } from '../../utils/jss/renderInShadowRoot'
+import { renderInShadowRoot } from '../../utils/shadow-root/renderInShadowRoot'
 import { PostInspector, PostInspectorProps } from '../../components/InjectedComponents/PostInspector'
 import { makeStyles } from '@material-ui/core'
-import { PostInfoContext, usePostInfoDetails } from '../../components/DataSource/usePostInfo'
+import { PostInfoContext } from '../../components/DataSource/usePostInfo'
+import { noop } from 'lodash-es'
 
 export function injectPostInspectorDefault<T extends string>(
     config: InjectPostInspectorDefaultConfig = {},
@@ -29,9 +30,9 @@ export function injectPostInspectorDefault<T extends string>(
     })
 
     const { zipPost } = config
-    const zipPostF = zipPost || (() => {})
+    const zipPostF = zipPost || noop
     return function injectPostInspector(current: PostInfo) {
-        return renderInShadowRoot(
+        const jsx = (
             <PostInfoContext.Provider value={current}>
                 <PostInspectorDefault
                     onDecrypted={(typed, raw) => {
@@ -41,16 +42,19 @@ export function injectPostInspectorDefault<T extends string>(
                     zipPost={() => zipPostF(current.rootNodeProxy)}
                     {...current}
                 />
-            </PostInfoContext.Provider>,
-            {
-                shadow: () => current.rootNodeProxy.afterShadow,
-                normal: () => current.rootNodeProxy.after,
-                concurrent: true,
-            },
+            </PostInfoContext.Provider>
         )
+        if (config.render) return config.render(jsx, current)
+        return renderInShadowRoot(jsx, {
+            shadow: () => current.rootNodeProxy.afterShadow,
+            normal: () => current.rootNodeProxy.after,
+            concurrent: true,
+            keyBy: 'post-inspector',
+        })
     }
 }
 
 interface InjectPostInspectorDefaultConfig {
     zipPost?(node: DOMProxy): void
+    render?(node: React.ReactNode, postInfo: PostInfo): () => void
 }

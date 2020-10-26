@@ -1,9 +1,18 @@
 import { regexMatch } from '../../../utils/utils'
 import { notNullable } from '../../../utils/assert'
-import { defaultTo } from 'lodash-es'
+import { defaultTo, flattenDeep } from 'lodash-es'
 import { nthChild } from '../../../utils/dom'
 import { ProfileIdentifier } from '../../../database/type'
 import { twitterUrl, canonifyImgUrl } from './url'
+import {
+    makeTypedMessageText,
+    makeTypedMessageAnchor,
+    makeTypedMessageEmpty,
+    TypedMessage,
+    isTypedMessageEmpty,
+    isTypedMessageText,
+    TypedMessageText,
+} from '../../../protocols/typed-message'
 
 /**
  * @example
@@ -30,6 +39,20 @@ const parseNameArea = (nameArea: string) => {
 
 const parseId = (t: string) => {
     return regexMatch(t, /status\/(\d+)/, 1)!
+}
+
+const serializeToText = (node: ChildNode): string => {
+    const snippets: string[] = []
+    for (const childNode of Array.from(node.childNodes)) {
+        if (childNode.nodeType === Node.TEXT_NODE) {
+            if (childNode.nodeValue) snippets.push(childNode.nodeValue)
+        } else if (childNode.nodeName === 'IMG') {
+            const img = childNode as HTMLImageElement
+            const matched = (img.getAttribute('src') ?? '').match(/emoji\/v2\/svg\/([\d\w]+)\.svg/) ?? []
+            if (matched[1]) snippets.push(String.fromCodePoint(Number.parseInt(`0x${matched[1]}`, 16)))
+        } else if (childNode.childNodes.length) snippets.push(serializeToText(childNode))
+    }
+    return snippets.join('')
 }
 
 const isMobilePost = (node: HTMLElement) => {
@@ -98,19 +121,27 @@ export const postNameParser = (node: HTMLElement) => {
         return parseNameArea(notNullable(node.querySelector<HTMLTableCellElement>('.user-info')).innerText)
     } else {
         const tweetElement = node.querySelector<HTMLElement>('[data-testid="tweet"]') ?? node
-        const nameInUniqueAnchorTweet =
-            tweetElement.children[1]?.querySelector<HTMLAnchorElement>('a[data-focusable="true"]')?.innerText ?? ''
+
+        // type 1:
+        // normal tweet
+        const anchorElement = tweetElement.children[1]?.querySelector<HTMLAnchorElement>('a[data-focusable="true"]')
+        const nameInUniqueAnchorTweet = anchorElement ? serializeToText(anchorElement) : ''
+
+        // type 2:
         const nameInDoubleAnchorsTweet = Array.from(
             tweetElement.children[1]?.querySelectorAll<HTMLAnchorElement>('a[data-focusable="true"]') ?? [],
         )
-            .map((a) => a.textContent)
+            .map(serializeToText)
             .join('')
-        const nameInQuoteTweet = nthChild(tweetElement, 0, 0, 0)?.innerText
 
+        // type 3:
+        // parse name in quoted tweet
+        const nameElementInQuoted = nthChild(tweetElement, 0, 0, 0)
+        const nameInQuoteTweet = nameElementInQuoted ? serializeToText(nameElementInQuoted) : ''
         return (
             [nameInUniqueAnchorTweet, nameInDoubleAnchorsTweet, nameInQuoteTweet]
                 .filter(Boolean)
-                .map((n) => parseNameArea(n!))
+                .map(parseNameArea)
                 .find((r) => r.name && r.handle) ?? {
                 name: '',
                 handle: '',
@@ -133,17 +164,11 @@ export const postAvatarParser = (node: HTMLElement) => {
 export const postContentParser = (node: HTMLElement) => {
     if (isMobilePost(node)) {
         const containerNode = node.querySelector('.tweet-text > div')
-        if (!containerNode) {
-            return ''
-        }
+        if (!containerNode) return ''
         return Array.from(containerNode.childNodes)
             .map((node) => {
-                if (node.nodeType === Node.TEXT_NODE) {
-                    return node.nodeValue
-                }
-                if (node.nodeName === 'A') {
-                    return (node as HTMLAnchorElement).getAttribute('title')
-                }
+                if (node.nodeType === Node.TEXT_NODE) return node.nodeValue
+                if (node.nodeName === 'A') return (node as HTMLAnchorElement).getAttribute('title')
                 return ''
             })
             .join(',')
@@ -158,6 +183,42 @@ export const postContentParser = (node: HTMLElement) => {
         ]
         return sto.filter(Boolean).join(' ')
     }
+}
+
+export const postContentMessageParser = (node: HTMLElement) => {
+    function resolve(content: string) {
+        if (content.startsWith('@')) return 'user'
+        if (content.startsWith('#')) return 'hash'
+        if (content.startsWith('$')) return 'cash'
+        return 'normal'
+    }
+    function make(node: Node): TypedMessage | TypedMessage[] {
+        if (node.nodeType === Node.TEXT_NODE) {
+            if (!node.nodeValue) return makeTypedMessageEmpty()
+            return makeTypedMessageText(node.nodeValue)
+        } else if (node instanceof HTMLAnchorElement) {
+            const anchor = node
+            const href = anchor.getAttribute('title') ?? anchor.getAttribute('href')
+            const content = anchor.textContent
+            if (!content) return makeTypedMessageEmpty()
+            return makeTypedMessageAnchor(resolve(content), href ?? 'javascript: void 0;', content)
+        } else if (node instanceof HTMLImageElement) {
+            const image = node
+            const src = image.getAttribute('src')
+            const matched = src?.match(/emoji\/v2\/svg\/([\d\w]+)\.svg/)
+            if (matched && matched[1])
+                return makeTypedMessageText(String.fromCodePoint(Number.parseInt(`0x${matched[1]}`, 16)))
+            return makeTypedMessageEmpty()
+        } else if (node.childNodes.length) {
+            const flattened = flattenDeep(Array.from(node.childNodes).map(make))
+            // conjunct text messages under same node
+            if (flattened.every(isTypedMessageText))
+                return makeTypedMessageText((flattened as TypedMessageText[]).map((x) => x.content).join(''))
+            return flattened
+        } else return makeTypedMessageEmpty()
+    }
+    const lang = node.parentElement!.querySelector<HTMLDivElement>('[lang]')
+    return lang ? Array.from(lang.childNodes).flatMap(make) : []
 }
 
 export const postImagesParser = async (node: HTMLElement): Promise<string[]> => {
@@ -178,7 +239,11 @@ export const postParser = (node: HTMLElement) => {
     return {
         ...postNameParser(node),
         avatar: postAvatarParser(node),
+
+        // FIXME:
+        // we get wrong pid for nested tweet
         pid: postIdParser(node),
-        content: postContentParser(node),
+
+        messages: postContentMessageParser(node).filter((x) => !isTypedMessageEmpty(x)),
     }
 }

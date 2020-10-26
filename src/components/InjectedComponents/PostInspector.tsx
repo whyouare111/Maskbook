@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useAsync } from 'react-use'
 import { DecryptPost, DecryptPostProps } from './DecryptedPost/DecryptedPost'
 import { AddToKeyStore, AddToKeyStoreProps } from './AddToKeyStore'
-import { deconstructPayload } from '../../utils/type-transform/Payload'
 import Services from '../../extension/service'
 import { ProfileIdentifier } from '../../database/type'
 import type { Profile } from '../../database'
@@ -11,9 +10,10 @@ import { getActivatedUI } from '../../social-network/ui'
 import { useValueRef } from '../../utils/hooks/useValueRef'
 import { debugModeSetting } from '../../settings/settings'
 import { DebugList } from '../DebugModeUI/DebugList'
-import type { TypedMessage } from '../../extension/background-script/CryptoServices/utils'
+import type { TypedMessage } from '../../protocols/typed-message'
 import { PluginUI, PluginConfig } from '../../plugins/plugin'
 import { usePostInfoDetails, usePostInfo } from '../DataSource/usePostInfo'
+import { ErrorBoundary } from '../shared/ErrorBoundary'
 
 export interface PostInspectorProps {
     onDecrypted(post: TypedMessage, raw: string): void
@@ -26,24 +26,23 @@ export interface PostInspectorProps {
 export function PostInspector(props: PostInspectorProps) {
     const postBy = usePostInfoDetails('postBy')
     const postContent = usePostInfoDetails('postContent')
+    const encryptedPost = usePostInfoDetails('postPayload')
     const postId = usePostInfoDetails('postIdentifier')
     const postImages = usePostInfoDetails('postMetadataImages')
     const isDebugging = useValueRef(debugModeSetting)
     const whoAmI = useCurrentIdentity()
     const friends = useFriendsList()
     const [alreadySelectedPreviously, setAlreadySelectedPreviously] = useState<Profile[]>([])
-
-    const encryptedPost = useMemo(() => deconstructPayload(postContent, getActivatedUI().payloadDecoder), [postContent])
     const provePost = useMemo(() => getActivatedUI().publicKeyDecoder(postContent), [postContent])
 
     const { value: sharedListOfPost } = useAsync(async () => {
         if (!whoAmI || !whoAmI.identifier.equals(postBy) || !encryptedPost.ok) return []
         const { iv, version } = encryptedPost.val
         return Services.Crypto.getSharedListOfPost(version, iv, postBy)
-    }, [postContent, postBy, whoAmI])
+    }, [postBy, whoAmI, encryptedPost])
     useEffect(() => setAlreadySelectedPreviously(sharedListOfPost ?? []), [sharedListOfPost])
 
-    if (postBy.isUnknown) return null
+    if (postBy.isUnknown) return <slot />
 
     const debugInfo = isDebugging ? (
         <DebugList
@@ -69,19 +68,19 @@ export function PostInspector(props: PostInspectorProps) {
                 onDecrypted={props.onDecrypted}
                 requestAppendRecipients={
                     // So should not create new data on version -40
-                    encryptedPost.ok && encryptedPost.val.version === -40
-                        ? async (people) => {
+                    encryptedPost.ok && encryptedPost.val.version !== -40
+                        ? async (profile) => {
                               const { val } = encryptedPost
                               const { iv, version } = val
                               const ownersAESKeyEncrypted =
                                   val.version === -38 ? val.AESKeyEncrypted : val.ownersAESKeyEncrypted
 
-                              setAlreadySelectedPreviously(alreadySelectedPreviously.concat(people))
+                              setAlreadySelectedPreviously(alreadySelectedPreviously.concat(profile))
                               return Services.Crypto.appendShareTarget(
                                   version,
                                   ownersAESKeyEncrypted,
                                   iv,
-                                  people.map((x) => x.identifier),
+                                  profile.map((x) => x.identifier),
                                   whoAmI!.identifier,
                                   { type: 'direct', at: new Date() },
                               )
@@ -105,6 +104,7 @@ export function PostInspector(props: PostInspectorProps) {
     function withAdditionalContent(x: JSX.Element | null) {
         return (
             <>
+                {encryptedPost.ok ? null : <slot />}
                 {x}
                 <PluginPostInspector />
                 {debugInfo}
@@ -116,7 +116,9 @@ function PluginPostInspector() {
     return (
         <>
             {[...PluginUI.values()].map((x) => (
-                <PluginPostInspectorForEach key={x.identifier} config={x} />
+                <ErrorBoundary key={x.identifier}>
+                    <PluginPostInspectorForEach config={x} />
+                </ErrorBoundary>
             ))}
         </>
     )

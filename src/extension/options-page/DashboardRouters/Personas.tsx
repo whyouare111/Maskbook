@@ -5,11 +5,11 @@ import AddIcon from '@material-ui/icons/Add'
 import AddCircleIcon from '@material-ui/icons/AddCircle'
 import RestoreIcon from '@material-ui/icons/Restore'
 import PersonaCard from '../DashboardComponents/PersonaCard'
-import { DashboardPersonaCreateDialog, DashboardImportPersonaDialog } from '../Dialogs/Persona'
-import { useModal } from '../Dialogs/Base'
+import { DashboardPersonaCreateDialog, DashboardImportPersonaDialog } from '../DashboardDialogs/Persona'
+import { useModal } from '../DashboardDialogs/Base'
 import { useI18N } from '../../../utils/i18n-next-ui'
 import { merge, cloneDeep } from 'lodash-es'
-import { useMyPersonas } from '../../../components/DataSource/independent'
+import { useMyPersonas } from '../../../components/DataSource/useMyPersonas'
 
 const useStyles = makeStyles((theme) =>
     createStyles({
@@ -27,7 +27,7 @@ const useStyles = makeStyles((theme) =>
             '&::-webkit-scrollbar': {
                 display: 'none',
             },
-            [theme.breakpoints.down('xs')]: {
+            [theme.breakpoints.down('sm')]: {
                 margin: 0,
                 paddingLeft: 0,
             },
@@ -64,11 +64,10 @@ export default function DashboardPersonasRouter() {
 
     const actions = useMemo(
         () => [
-            <Button color="primary" variant="outlined" onClick={openImportPersona}>
+            <Button variant="outlined" onClick={openImportPersona}>
                 {t('import')}
             </Button>,
             <Button
-                color="primary"
                 variant="contained"
                 onClick={openCreatePersona}
                 endIcon={<AddCircleIcon />}

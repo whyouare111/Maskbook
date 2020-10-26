@@ -1,4 +1,4 @@
-import { ValueRef, GetContext } from '@holoflows/kit'
+import { ValueRef, GetContext } from '@dimensiondev/holoflows-kit'
 import { MessageCenter } from '../utils/messages'
 import { defer } from '../utils/utils'
 import { getStorage, setStorage } from '../extension/background-script/StorageService'
@@ -47,7 +47,7 @@ MessageCenter.on('settingsUpdated', async (payload) => {
     settings.resolve(settings.value)
 })
 
-function createInternalSettings<T extends browser.storage.StorageValue>(
+export function createInternalSettings<T extends browser.storage.StorageValue>(
     key: string,
     value: T,
     comparer: (a: T, b: T) => boolean = (a, b) => a === b,

@@ -1,4 +1,3 @@
-import './elliptic-loader'
 import { WebCryptoNotSupportedMethods, WebCryptoSupportedMethods, WebCryptoMethods } from '../WebCrypto'
 import {
     getKeyParameter,
@@ -13,7 +12,7 @@ import {
 import type { MnemonicWordDetail } from '../interfaces/interface.blockchain'
 
 if (process.env.NODE_ENV !== 'test' && !process.env.STORYBOOK) {
-    require('webcrypto-liner')
+    import('webcrypto-liner')
 }
 
 const ECDH = getKeyParameter('ecdh')[0]
@@ -30,21 +29,6 @@ function initEllipticBackend(_: WebCryptoSupportedMethods): WebCryptoNotSupporte
                 privateKey: await CryptoKeyToJsonWebKey(privateKey),
                 publicKey: await CryptoKeyToJsonWebKey(publicKey),
             }
-        },
-        async sign_ecdsa_k256(key, hash, message) {
-            return crypto.subtle.sign(
-                { name: 'ECDSA', hash: { name: hash } },
-                await JsonWebKeyToCryptoKey(key, ...getKeyParameter('ecdsa')),
-                message,
-            )
-        },
-        async verify_ecdsa_k256(key, hash, message, signature) {
-            return crypto.subtle.verify(
-                { name: 'ECDSA', hash: { name: hash } },
-                await JsonWebKeyToCryptoKey(key, ...getKeyParameter('ecdsa')),
-                signature,
-                message,
-            )
         },
         async derive_aes_from_ecdh_k256(priv, pub, aes = 'AES-GCM', length = 256) {
             const key = await crypto.subtle.deriveKey(

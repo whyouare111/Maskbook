@@ -1,31 +1,25 @@
 import React from 'react'
 import type { PostInfo } from '../PostInfo'
-import { MutationObserverWatcher } from '@holoflows/kit/es'
+import { MutationObserverWatcher } from '@dimensiondev/holoflows-kit/es'
 import { CommentBox, CommentBoxProps } from '../../components/InjectedComponents/CommentBox'
 import Services from '../../extension/service'
-import { renderInShadowRoot } from '../../utils/jss/renderInShadowRoot'
-import { dispatchCustomEvents, nop, selectElementContents, sleep } from '../../utils/utils'
+import { renderInShadowRoot } from '../../utils/shadow-root/renderInShadowRoot'
 import { makeStyles } from '@material-ui/core'
 import { PostInfoContext, usePostInfoDetails, usePostInfo } from '../../components/DataSource/usePostInfo'
+import { Flags } from '../../utils/flags'
+import { noop } from 'lodash-es'
+import { MessageCenter } from '../../utils/messages'
 
-const defHandler = async (encryptedComment: string, current: PostInfo, realCurrent: HTMLElement | null) => {
-    const root = realCurrent || current.rootNode
-    /**
-     * TODO:
-     *  Yeah I see but I think root.querySelector('[contenteditable]')
-     *  (some website may use textarea or input) and
-     *  dispatchCustomEvents('paste', encryptedComment)
-     *  (not every website are using React and listened from document)
-     *  is not a good default.
-     */
-    selectElementContents(root.querySelector('[contenteditable]')!)
-    dispatchCustomEvents('paste', encryptedComment)
-    await sleep(200)
-    if (!root.innerText.includes(encryptedComment)) prompt('Please paste it into the comment box!', encryptedComment)
+const defaultOnPasteToCommentBox = async (
+    encryptedComment: string,
+    _current: PostInfo,
+    _realCurrent: HTMLElement | null,
+) => {
+    MessageCenter.emit('autoPasteFailed', { text: encryptedComment })
 }
 
 export const injectCommentBoxDefaultFactory = function <T extends string>(
-    onPasteToCommentBox = defHandler,
+    onPasteToCommentBox = defaultOnPasteToCommentBox,
     additionPropsToCommentBox: (classes: Record<T, string>) => Partial<CommentBoxProps> = () => ({}),
     useCustomStyles: (props?: any) => Record<T, string> = makeStyles({}) as any,
 ) {
@@ -47,7 +41,7 @@ export const injectCommentBoxDefaultFactory = function <T extends string>(
         return <CommentBox onSubmit={onCallback} {...props} />
     })
     return (current: PostInfo) => {
-        if (!current.commentBoxSelector) return nop
+        if (!current.commentBoxSelector) return noop
         const commentBoxWatcher = new MutationObserverWatcher(current.commentBoxSelector.clone(), current.rootNode)
             .useForeach((node, key, meta) =>
                 renderInShadowRoot(
@@ -60,7 +54,7 @@ export const injectCommentBoxDefaultFactory = function <T extends string>(
                     },
                 ),
             )
-            .setDOMProxyOption({ afterShadowRootInit: { mode: webpackEnv.shadowRootMode } })
+            .setDOMProxyOption({ afterShadowRootInit: { mode: Flags.using_ShadowDOM_attach_mode } })
             .startWatch({
                 childList: true,
                 subtree: true,

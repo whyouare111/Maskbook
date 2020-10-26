@@ -1,12 +1,14 @@
-import { GetContext } from '@holoflows/kit/es'
+import 'webpack-target-webextension/lib/background'
+import './polyfill'
+import { GetContext } from '@dimensiondev/holoflows-kit/es'
 import { MessageCenter } from './utils/messages'
-import 'webcrypto-liner'
-import './_background_loader.0'
+// @ts-ignore
+import { crypto } from 'webcrypto-liner/build/index.es'
+Object.defineProperty(globalThis, 'crypto', { configurable: true, enumerable: true, get: () => crypto })
 import './_background_loader.1'
 import './_background_loader.2'
 import './extension/service'
 import './provider.worker'
-import './network/matrix/instance'
 
 import * as PersonaDB from './database/Persona/Persona.db'
 import * as PersonaDBHelper from './database/Persona/helpers'
@@ -23,9 +25,10 @@ import * as post from './database/post'
 import { definedSocialNetworkWorkers } from './social-network/worker'
 import { getWelcomePageURL } from './extension/options-page/Welcome/getWelcomePageURL'
 import { exclusiveTasks } from './extension/content-script/tasks'
+import { Flags } from './utils/flags'
 
-if (process.env.NODE_ENV === 'development') {
-    require('./protocols/wallet-provider/metamask-provider')
+if (process.env.NODE_ENV === 'development' && Flags.matrix_based_service_enabled) {
+    import('./network/matrix/instance')
 }
 
 if (GetContext() === 'background') {
@@ -44,20 +47,30 @@ if (GetContext() === 'background') {
         })
     browser.webNavigation.onCommitted.addListener(async (arg) => {
         if (arg.url === 'about:blank') return
-        await contentScriptReady
+        if (!arg.url.startsWith('http')) return
+        const contains = await browser.permissions.contains({ origins: [arg.url] })
         /**
-         * For WKWebview, there is a special way to do it in the manifest.json
-         *
+         * For iOS App, there is a special way to do it in the manifest.json
          * A `iOS-injected-scripts` field is used to add extra scripts
          */
-        if (webpackEnv.target !== 'WKWebview')
+        if (!Flags.support_native_injected_script_declaration && !Flags.requires_injected_script_run_directly) {
             browser.tabs
                 .executeScript(arg.tabId, {
                     runAt: 'document_start',
                     frameId: arg.frameId,
+                    // Refresh the injected script every time in the development mode.
                     code: process.env.NODE_ENV === 'development' ? await getInjectedScript() : await injectedScript,
                 })
                 .catch(IgnoreError(arg))
+        }
+        if (Flags.requires_injected_script_run_directly && contains) {
+            browser.tabs.executeScript(arg.tabId, {
+                runAt: 'document_start',
+                frameId: arg.frameId,
+                file: 'js/injected-script.js',
+            })
+        }
+        await contentScriptReady
         for (const script of contentScripts) {
             const option: browser.extensionTypes.InjectDetails = {
                 runAt: 'document_idle',
@@ -67,13 +80,13 @@ if (GetContext() === 'background') {
             try {
                 await browser.tabs.executeScript(arg.tabId, option)
             } catch (e) {
-                IgnoreError(e)
+                IgnoreError(option)(e)
             }
         }
     })
 
     browser.runtime.onInstalled.addListener((detail) => {
-        if (webpackEnv.genericTarget === 'facebookApp') return
+        if (Flags.has_native_welcome_ui) return
         if (detail.reason === 'install') {
             browser.tabs.create({ url: getWelcomePageURL() })
         }
@@ -89,32 +102,32 @@ if (GetContext() === 'background') {
     })
 
     contentScriptReady.then(() => {
-        if (webpackEnv.genericTarget === 'facebookApp') {
-            exclusiveTasks('https://m.facebook.com/', { important: true })
+        // TODO: support twitter
+        if (Flags.has_no_browser_tab_ui) {
+            exclusiveTasks(getWelcomePageURL(), { important: true })
         }
-        exclusiveTasks(getWelcomePageURL(), { important: true })
     })
 }
 async function getInjectedScript() {
-    return `{
+    try {
+        return `{
         const script = document.createElement('script')
         script.innerHTML = ${await fetch('js/injected-script.js')
             .then((x) => x.text())
             .then(JSON.stringify)}
         document.documentElement.appendChild(script)
     }`
+    } catch (e) {
+        console.error(e)
+        return `console.log('Injected script failed to load.')`
+    }
 }
 function IgnoreError(arg: unknown): (reason: Error) => void {
     return (e) => {
-        if (e.message.includes('non-structured-clonable data')) {
+        const ignoredErrorMessages = ['non-structured-clonable data']
+        if (ignoredErrorMessages.some((x) => e.message.includes(x))) {
             // It's okay we don't need the result, happened on Firefox
-        } else if (e.message.includes('Frame not found, or missing host permission')) {
-            // It's maybe okay, happened on Firefox
-        } else if (e.message.includes('must request permission')) {
-            // It's okay, we inject to the wrong site and browser rejected it.
-        } else if (e.message.includes('Cannot access a chrome')) {
-            // It's okay, we inject to the wrong site and browser rejected it.
-        } else console.error('Inject error', e, arg, Object.entries(e))
+        } else console.error('Inject error', e.message, arg, Object.entries(e))
     }
 }
 

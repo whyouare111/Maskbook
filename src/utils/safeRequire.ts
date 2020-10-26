@@ -1,9 +1,4 @@
-import { GetContext } from '@holoflows/kit/es'
-
-export function safeReact() {
-    if (GetContext() === 'background') throw new Error('Illegal context')
-    return require('react') as typeof import('react')
-}
+import { GetContext } from '@dimensiondev/holoflows-kit/es'
 
 export function safeMUI() {
     if (GetContext() === 'background') throw new Error('Illegal context')

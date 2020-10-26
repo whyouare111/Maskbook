@@ -9,7 +9,7 @@ import {
     decodeText,
 } from '../utils/type-transform/String-ArrayBuffer'
 import { memoizePromise } from '../utils/memoize'
-import { makeTypedMessageText } from '../extension/background-script/CryptoServices/utils'
+import { makeTypedMessageText } from '../protocols/typed-message'
 import { i18n } from '../utils/i18n-next'
 import { CryptoWorker } from '../modules/workers'
 import type {
@@ -273,21 +273,6 @@ export async function encryptWithAES(info: {
 
     const encrypted = await CryptoWorker.encrypt_aes_gcm(info.aesKey, iv, content)
     return { content: encrypted, iv }
-}
-//#endregion
-//#region Sign & verify
-export async function sign(message: string | ArrayBuffer, privateKey: EC_Private_JsonWebKey): Promise<ArrayBuffer> {
-    if (typeof message === 'string') message = encodeText(message)
-    return CryptoWorker.sign_ecdsa_k256(privateKey, 'SHA-256', message)
-}
-export async function verify(
-    content: string | ArrayBuffer,
-    signature: string | ArrayBuffer,
-    publicKey: EC_Public_JsonWebKey,
-): Promise<boolean> {
-    if (typeof signature === 'string') signature = decodeArrayBuffer(signature)
-    if (typeof content === 'string') content = encodeText(content)
-    return CryptoWorker.verify_ecdsa_k256(publicKey, 'SHA-256', content, signature)
 }
 //#endregion
 

@@ -11,9 +11,11 @@ import * as UserGroupService from './extension/background-script/UserGroupServic
 import * as SteganographyService from './extension/background-script/SteganographyService'
 import * as PluginService from './extension/background-script/PluginService'
 import * as HelperService from './extension/background-script/HelperService'
-import * as NonceService from './extension/background-script/NonceService'
 import * as ProviderService from './extension/background-script/ProviderService'
 import * as ImageShuffleService from './extension/background-script/ImageShuffleService'
+import * as EthereumService from './extension/background-script/EthereumService'
+import { upload as pluginArweaveUpload } from './plugins/FileService/arweave/index'
+import { sendTransaction } from './extension/background-script/EthereumServices/transaction'
 import {
     decryptFromText,
     decryptFromImageUrl,
@@ -28,15 +30,17 @@ Object.assign(globalThis, {
     UserGroupService,
     PluginService,
     HelperService,
-    NonceService,
     ProviderService,
     ImageShuffleService,
+    EthereumService,
 })
 
 Object.assign(globalThis, {
     ServicesWithProgress: {
+        pluginArweaveUpload,
         decryptFromText,
         decryptFromImageUrl,
+        sendTransaction,
         decryptFromShuffledImage,
     },
 })

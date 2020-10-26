@@ -1,5 +1,4 @@
-import React, { useEffect, useRef } from 'react'
-import { useCapturedInput } from '../../utils/hooks/useCapturedEvents'
+import React from 'react'
 import { useI18N } from '../../utils/i18n-next-ui'
 import { makeStyles } from '@material-ui/core/styles'
 import { InputBase } from '@material-ui/core'
@@ -8,22 +7,22 @@ const useStyles = makeStyles(() => {
     return {
         root: {
             fontSize: 13,
-            background: '#f2f3f5',
-            border: '1px solid #ccd0d5',
+            background: '#3a3b3c',
             width: '100%',
             height: 34,
             borderRadius: 20,
             padding: '2px 1em',
             boxSizing: 'border-box',
             marginTop: 6,
+            color: '#e4e6eb',
         },
         input: {
             '&::placeholder': {
-                color: '#8d949e',
+                color: '#b0b3b8',
                 opacity: 1,
             },
             '&:focus::placeholder': {
-                color: '#bec3c9',
+                color: '#d0d2d6',
             },
         },
     }
@@ -35,23 +34,21 @@ export interface CommentBoxProps {
 }
 export function CommentBox(props: CommentBoxProps) {
     const classes = useStyles()
-    const [binder, inputRef, node] = useCapturedInput(() => {})
     const { t } = useI18N()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(
-        binder(['keypress'], (e) => {
-            if (!node || !node.value) return
-            if (e.key === 'Enter') {
-                props.onSubmit(node.value)
-                node.value = ''
-            }
-        }),
-    )
     return (
         <InputBase
             className={classes.root}
-            inputProps={{ className: classes.input, ref: inputRef, 'data-testid': 'comment_input' }}
+            inputProps={{ className: classes.input, 'data-testid': 'comment_input' }}
             placeholder={t('comment_box__placeholder')}
+            onKeyDownCapture={(e) => {
+                const node = e.target as HTMLInputElement
+                console.log(e.currentTarget)
+                if (!node.value) return
+                if (e.key === 'Enter') {
+                    props.onSubmit(node.value)
+                    node.value = ''
+                }
+            }}
             {...props.inputProps}
         />
     )

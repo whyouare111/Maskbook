@@ -1,19 +1,15 @@
 ---
 name: Task
 about: Non-coding task
-title: "[Task] "
+title: '[Task] '
 labels: Non-Coding Task
 assignees: ''
-
 ---
 
-## Metadata
+## Introduction and Background
 
-Field | Value
---- | ---
-Parent Task/Demand | /* Issue Number*/
-Expected Delivery Date | 2020-W??-5
+/_Describe the background of this task_/
 
 ## Content
 
-/* Actual content here... */
+/_Actual content here..._/

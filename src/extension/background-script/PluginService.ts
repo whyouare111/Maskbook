@@ -1,11 +1,16 @@
-import * as RedPacket from '../../plugins/Wallet/red-packet-fsm'
-import * as Wallet from '../../plugins/Wallet/wallet'
-import * as Gitcoin from '../../plugins/Gitcoin/Services'
-import type { ERC20TokenRecord, ManagedWalletRecord, ExoticWalletRecord } from '../../plugins/Wallet/database/types'
+import * as RedPacket from '../../plugins/RedPacket/services'
+import * as Wallet from '../../plugins/Wallet/services'
+import * as Gitcoin from '../../plugins/Gitcoin/service'
+import * as Poll from '../../plugins/Polls/Services'
+import * as FileService from '../../plugins/FileService/service'
+import * as Trader from '../../plugins/Trader/services'
 
 const Plugins = {
     'maskbook.red_packet': RedPacket,
     'maskbook.wallet': Wallet,
+    'maskbook.fileservice': FileService,
+    'maskbook.trader': Trader,
+    'maskbook.polls': Poll,
     'co.gitcoin': Gitcoin,
 } as const
 type Plugins = typeof Plugins
@@ -16,22 +21,4 @@ export async function invokePlugin<K extends keyof Plugins, M extends keyof Plug
 ): Promise<P extends (...args: any) => Promise<infer R> ? R : never> {
     // @ts-ignore
     return Plugins[key][method](...args)
-}
-
-export type WalletDetails = ManagedWalletRecord | ExoticWalletRecord
-export type ERC20TokenDetails = Pick<ERC20TokenRecord, 'address' | 'decimals' | 'name' | 'network' | 'symbol'>
-export async function getWallets(): Promise<{ wallets: WalletDetails[]; tokens: ERC20TokenDetails[] }> {
-    // TODO: support Metamask
-    const { tokens, wallets: managedList } = await Wallet.getManagedWallets()
-    const wallets = managedList
-        .sort((x) => (x._wallet_is_default ? 1 : 0))
-        .map<WalletDetails>((x) => ({
-            ...x,
-            type: x.type || 'managed',
-        }))
-    return { wallets, tokens }
-}
-export async function getManagedWallet(address: string) {
-    const { wallets } = await Wallet.getManagedWallets()
-    return wallets.find((x) => x.address === address)
 }

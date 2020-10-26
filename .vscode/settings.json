@@ -1,14 +1,15 @@
 {
     "typescript.tsdk": "node_modules/typescript/lib",
     "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "modifications",
     "editor.codeActionsOnSave": {
         "source.fixAll": true
     },
     "i18n-ally.sourceLanguage": "en",
-    "i18n-ally.displayLanguage": "zh",
+    "i18n-ally.displayLanguage": "en",
     "i18n-ally.localesPaths": "src/_locales",
     "i18n-ally.sortKeys": true,
-    "i18n-ally.keystyle": "nested",
+    "i18n-ally.keystyle": "flat",
     "i18n-ally.annotations": true,
     "i18n-ally.indent": 4,
     "i18n-ally.enabledParsers": ["json"],
@@ -16,6 +17,15 @@
         {
             "fileMatch": ["/src/manifest.json"],
             "url": "http://json.schemastore.org/chrome-manifest"
+        },
+        {
+            "fileMatch": ["/src/plugins/*/schema.json"],
+            "url": "http://json-schema.org/draft-07/schema"
+        },
+        {
+            "fileMatch": ["/src/_locales/*/messages.json"],
+            "url": "/.vscode/schema/locale.json"
         }
-    ]
+    ],
+    "cSpell.words": ["Reificated"]
 }

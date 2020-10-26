@@ -1,12 +1,13 @@
 import { AsyncCall, AsyncGeneratorCall, AsyncCallOptions } from 'async-call-rpc/full'
-import { GetContext, OnlyRunInContext } from '@holoflows/kit/es'
+import { GetContext, OnlyRunInContext } from '@dimensiondev/holoflows-kit/es'
 import * as MockService from './mock-service'
 import Serialization from '../utils/type-transform/Serialization'
 import { ProfileIdentifier, GroupIdentifier, PostIdentifier, PostIVIdentifier, ECKeyIdentifier } from '../database/type'
-import { getCurrentNetworkWorkerService } from './background-script/WorkerService'
 
-import { MessageCenter } from '@holoflows/kit/es'
+import { MessageCenter } from '@dimensiondev/holoflows-kit/es'
 import { IdentifierMap } from '../database/IdentifierMap'
+import type { upload as pluginArweaveUpload } from '../plugins/FileService/arweave/index'
+import BigNumber from 'bignumber.js'
 
 interface Services {
     Crypto: typeof import('./background-script/CryptoService')
@@ -16,9 +17,9 @@ interface Services {
     Steganography: typeof import('./background-script/SteganographyService')
     Plugin: typeof import('./background-script/PluginService')
     Helper: typeof import('./background-script/HelperService')
-    Nonce: typeof import('./background-script/NonceService')
     Provider: typeof import('./background-script/ProviderService')
     ImageShuffle: typeof import('./background-script/ImageShuffleService')
+    Ethereum: typeof import('./background-script/EthereumService')
 }
 const Services = {} as Services
 export default Services
@@ -29,6 +30,7 @@ const logOptions: AsyncCallOptions['log'] = {
     remoteError: true,
     sendLocalStack: true,
     type: 'pretty',
+    requestReplay: process.env.NODE_ENV === 'development',
 }
 if (!('Services' in globalThis)) {
     Object.assign(globalThis, { Services })
@@ -39,16 +41,18 @@ if (!('Services' in globalThis)) {
     register(createProxyToService('IdentityService'), 'Identity', {})
     register(createProxyToService('UserGroupService'), 'UserGroup', {})
     register(createProxyToService('PluginService'), 'Plugin', MockService.PluginService)
-    register(createProxyToService('HelperService'), 'Helper', {})
-    register(createProxyToService('NonceService'), 'Nonce', {})
+    register(createProxyToService('HelperService'), 'Helper', MockService.HelperService)
     register(createProxyToService('ProviderService'), 'Provider', {})
     register(createProxyToService('ImageShuffleService'), 'ImageShuffle', {})
+    register(createProxyToService('EthereumService'), 'Ethereum', {})
 }
 interface ServicesWithProgress {
     // Sorry you should add import at '../_background_loader.1.ts'
+    pluginArweaveUpload: typeof pluginArweaveUpload
     decryptFromText: typeof import('./background-script/CryptoServices/decryptFrom').decryptFromText
     decryptFromImageUrl: typeof import('./background-script/CryptoServices/decryptFrom').decryptFromImageUrl
     decryptFromShuffledImage: typeof import('./background-script/CryptoServices/decryptFrom').decryptFromShuffledImage
+    sendTransaction: typeof import('./background-script/EthereumServices/transaction').sendTransaction
 }
 function createProxyToService(name: string) {
     return new Proxy(
@@ -74,7 +78,7 @@ export const ServicesWithProgress = AsyncGeneratorCall<ServicesWithProgress>(
         key: 'Service+',
         log: logOptions,
         serializer: Serialization,
-        messageChannel: new MessageCenter(false),
+        channel: new MessageCenter(false, 'service-progress').eventBasedChannel,
         strict: false,
     },
 )
@@ -84,25 +88,30 @@ Object.assign(globalThis, {
     GroupIdentifier,
     PostIdentifier,
     PostIVIdentifier,
-    getCurrentNetworkWorkerService,
     ECKeyIdentifier,
     IdentifierMap,
+    BigNumber,
+})
+Object.defineProperty(BigNumber.prototype, '__debug__amount__', {
+    get(this: BigNumber) {
+        return this.toNumber()
+    },
+    configurable: true,
 })
 
 //#region
 type Service = Record<string, (...args: unknown[]) => Promise<unknown>>
 function register<T extends Service>(service: T, name: keyof Services, mock?: Partial<T>) {
-    if (OnlyRunInContext(['content', 'options', 'debugging', 'background'], false)) {
+    if (OnlyRunInContext(['content', 'options', 'debugging', 'background'], false) || process.env.STORYBOOK) {
         GetContext() !== 'debugging' && console.log(`Service ${name} registered in ${GetContext()}`)
-        const mc = new MessageCenter(false)
+        const mc = new MessageCenter(process.env.STORYBOOK ? true : false, name)
         Object.assign(Services, {
             [name]: AsyncCall(service, {
                 key: name,
                 serializer: Serialization,
                 log: logOptions,
-                messageChannel: mc,
+                channel: mc.eventBasedChannel,
                 preferLocalImplementation: GetContext() === 'background',
-                preservePauseOnException: process.env.NODE_ENV === 'development',
                 strict: false,
             }),
         })
@@ -121,8 +130,7 @@ function register<T extends Service>(service: T, name: keyof Services, mock?: Pa
                 key: name,
                 serializer: Serialization,
                 log: logOptions,
-                messageChannel: new MessageCenter(true),
-                preservePauseOnException: process.env.NODE_ENV === 'development',
+                channel: mc.eventBasedChannel,
                 strict: false,
             })
         }

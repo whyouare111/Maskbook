@@ -1,4 +1,5 @@
-import type { TypedMessage } from '../extension/background-script/CryptoServices/utils'
+import type { TypedMessage, TypedMessageCompound } from '../protocols/typed-message'
+import type { PostInfo } from '../social-network/PostInfo'
 
 type PluginInjectFunction<T> =
     | {
@@ -11,19 +12,34 @@ export interface PluginConfig {
     pluginName: string
     identifier: string
     successDecryptionInspector?: PluginInjectFunction<{ message: TypedMessage }>
+    pageInspector?: React.ComponentType<{}>
     postInspector?: PluginInjectFunction<{}>
+    dashboardInspector?: PluginInjectFunction<{}>
     postDialogMetadataBadge?: Map<string, (metadata: any) => string>
+    postDialogEntries?: {
+        label: string | React.ReactNode
+        onClick(): void
+    }[]
+    messageProcessor?: (message: TypedMessageCompound) => TypedMessageCompound
 }
 
 const plugins = new Set<PluginConfig>()
 export const PluginUI: ReadonlySet<PluginConfig> = plugins
 
+import { WalletPluginDefine } from './Wallet/define'
 import { GitcoinPluginDefine } from './Gitcoin/define'
-import { RedPacketPluginDefine } from './Wallet/define'
-import type { PostInfo } from '../social-network/PostInfo'
+import { RedPacketPluginDefine } from './RedPacket/define'
+import { PollsPluginDefine } from './Polls/define'
 import { StorybookPluginDefine } from './Storybook/define'
+import { FileServicePluginDefine } from './FileService/define'
+import { TraderPluginDefine } from './Trader/define'
+import { Flags } from '../utils/flags'
+import { TransakPluginDefine } from './Transak/define'
+plugins.add(WalletPluginDefine)
 plugins.add(GitcoinPluginDefine)
 plugins.add(RedPacketPluginDefine)
-if (process.env.STORYBOOK) {
-    plugins.add(StorybookPluginDefine)
-}
+plugins.add(FileServicePluginDefine)
+if (Flags.poll_enabled) plugins.add(PollsPluginDefine)
+if (Flags.trader_enabled) plugins.add(TraderPluginDefine)
+if (Flags.transak_enabled) plugins.add(TransakPluginDefine)
+if (process.env.STORYBOOK) plugins.add(StorybookPluginDefine)

@@ -1,14 +1,23 @@
-import * as React from 'react'
+import React from 'react'
 import { Typography, Link } from '@material-ui/core'
 import anchorme from 'anchorme'
-import type {
+import {
     TypedMessage,
     TypedMessageText,
+    TypedMessageAnchor,
     TypedMessageImage,
-    TypedMessageComplex,
+    TypedMessageCompound,
     TypedMessageUnknown,
-} from '../../extension/background-script/CryptoServices/utils'
-import { unreachable } from '../../utils/utils'
+    TypedMessageSuspended,
+    registerTypedMessageRenderer,
+    TypedMessageEmpty,
+    makeTypedMessageText,
+} from '../../protocols/typed-message'
+import { Image } from '../shared/Image'
+import { useAsync } from 'react-use'
+import { getRendererOfTypedMessage } from '../../protocols/typed-message'
+import { deconstructPayload } from '../../utils/type-transform/Payload'
+import { PayloadReplacer } from './PayloadReplacer'
 
 interface MetadataRendererProps {
     metadata: TypedMessage['meta']
@@ -25,66 +34,78 @@ export interface TypedMessageRendererProps<T extends TypedMessage> {
         before?: React.ComponentType<MetadataRendererProps>
         after?: React.ComponentType<MetadataRendererProps>
     }
-    TypedMessageRenderer?: React.ComponentType<TypedMessageRendererProps<TypedMessage>>
-    TypedMessageTextRenderer?: React.ComponentType<TypedMessageRendererProps<TypedMessageText>>
-    TypedMessageImageRenderer?: React.ComponentType<TypedMessageRendererProps<TypedMessageImage>>
-    TypedMessageComplexRenderer?: React.ComponentType<TypedMessageRendererProps<TypedMessageComplex>>
-    TypedMessageUnknownRenderer?: React.ComponentType<TypedMessageRendererProps<TypedMessageUnknown>>
 }
 
 export const DefaultTypedMessageRenderer = React.memo(function DefaultTypedMessageRenderer(
     props: TypedMessageRendererProps<TypedMessage>,
 ) {
-    switch (props.message.type) {
-        case 'complex': {
-            const Complex = props.TypedMessageComplexRenderer || DefaultTypedMessageComplexRenderer
-            return <Complex {...props} message={props.message} />
-        }
-        case 'text': {
-            const Text = props.TypedMessageTextRenderer || DefaultTypedMessageTextRenderer
-            return <Text {...props} message={props.message} />
-        }
-        case 'image': {
-            const Image = props.TypedMessageImageRenderer || DefaultTypedMessageImageRenderer
-            return <Image {...props} message={props.message} />
-        }
-        case 'unknown': {
-            const Unknown = props.TypedMessageUnknownRenderer || DefaultTypedMessageUnknownRenderer
-            return <Unknown {...props} message={props.message} />
-        }
-        default:
-            return unreachable(props.message)
-    }
+    const Renderer = getRendererOfTypedMessage(props.message)[0]?.component || DefaultTypedMessageUnknownRenderer
+    return <Renderer {...props} message={props.message} />
 })
 
 export const DefaultTypedMessageTextRenderer = React.memo(function DefaultTypedMessageTextRenderer(
     props: TypedMessageRendererProps<TypedMessageText>,
 ) {
-    console.log('DEBUG: DefaultTypedMessageTextRenderer')
-    console.log(props)
+    const { content } = props.message
+    const deconstructed = deconstructPayload(content, null)
     return renderWithMetadata(
         props,
-        <Typography variant="body1" style={{ lineBreak: 'anywhere' }} data-testid="text_payload">
-            <RenderText text={props.message.content}></RenderText>
+        <Typography component="span" color="textPrimary" variant="body1" data-testid="text_payload">
+            {deconstructed.ok ? <PayloadReplacer payload={content} /> : <RenderText text={content} />}
         </Typography>,
     )
+})
+registerTypedMessageRenderer('text', {
+    component: DefaultTypedMessageTextRenderer,
+    id: 'maskbook.text',
+    priority: 0,
+})
+
+export const DefaultTypedMessageAnchorRenderer = React.memo(function DefaultTypedMessageAnchorRenderer(
+    props: TypedMessageRendererProps<TypedMessageAnchor>,
+) {
+    const { content, href } = props.message
+    const deconstructed = deconstructPayload(content, null)
+    return renderWithMetadata(
+        props,
+        <Typography component="span" variant="body1" data-testid="anchor_payload">
+            {deconstructed.ok ? (
+                <PayloadReplacer payload={href} />
+            ) : (
+                // TODO:
+                // shrink link size
+                <Link color="primary" target="_blank" rel="noopener noreferrer" href={href}>
+                    {content}
+                </Link>
+            )}
+        </Typography>,
+    )
+})
+registerTypedMessageRenderer('anchor', {
+    component: DefaultTypedMessageAnchorRenderer,
+    id: 'maskbook.anchor',
+    priority: 0,
 })
 
 export const DefaultTypedMessageImageRenderer = React.memo(function DefaultTypedMessageImageRenderer(
     props: TypedMessageRendererProps<TypedMessageImage>,
 ) {
-    console.log(props.message.content)
+    const { image, width, height } = props.message
     return renderWithMetadata(
         props,
-        <Typography variant="body1" style={{ lineBreak: 'anywhere' }} data-testid="text_payload">
-            {/* TODO: support different image type */}
-            <img style={{ width: '100%' }} src={`data:image/png;base64,${props.message.content}`} />
+        <Typography variant="body1" data-testid="image_payload">
+            <Image src={image} width={width} height={height} />
         </Typography>,
     )
 })
+registerTypedMessageRenderer('image', {
+    component: DefaultTypedMessageImageRenderer,
+    id: 'maskbook.image',
+    priority: 0,
+})
 
-export const DefaultTypedMessageComplexRenderer = React.memo(function DefaultTypedMessageComplexRenderer(
-    props: TypedMessageRendererProps<TypedMessageComplex>,
+export const DefaultTypedMessageCompoundRenderer = React.memo(function DefaultTypedMessageCompoundRenderer(
+    props: TypedMessageRendererProps<TypedMessageCompound>,
 ) {
     try {
         JSON.stringify(props.message.items)
@@ -97,22 +118,63 @@ export const DefaultTypedMessageComplexRenderer = React.memo(function DefaultTyp
             )
         }
     }
-    const R = props.TypedMessageRenderer || DefaultTypedMessageRenderer
     return (
         <>
             {props.message.items.map((x, index) => (
-                <R key={index} {...props} message={x} />
+                <DefaultTypedMessageRenderer key={index} {...props} message={x} />
             ))}
         </>
     )
+})
+registerTypedMessageRenderer('compound', {
+    component: DefaultTypedMessageCompoundRenderer,
+    id: 'maskbook.compound',
+    priority: 0,
+})
+
+export const DefaultTypedMessageEmptyRenderer = React.memo(function DefaultTypedMessageEmptyRenderer(
+    props: TypedMessageRendererProps<TypedMessageEmpty>,
+) {
+    return renderWithMetadata(props, null)
+})
+registerTypedMessageRenderer('empty', {
+    component: DefaultTypedMessageEmptyRenderer,
+    id: 'maskbook.empty',
+    priority: 0,
 })
 
 export const DefaultTypedMessageUnknownRenderer = React.memo(function DefaultTypedMessageUnknownRenderer(
     props: TypedMessageRendererProps<TypedMessageUnknown>,
 ) {
-    // prevent unused warning
-    props.message
-    return renderWithMetadata(props, <Typography>Unknown message</Typography>)
+    return renderWithMetadata(props, <Typography color="textPrimary">Unknown message</Typography>)
+})
+registerTypedMessageRenderer('unknown', {
+    component: DefaultTypedMessageUnknownRenderer,
+    id: 'maskbook.unknown',
+    priority: 0,
+})
+
+export const DefaultTypedMessageSuspendedRenderer = React.memo(function DefaultTypedMessageSuspendedRenderer(
+    props: TypedMessageRendererProps<TypedMessageSuspended>,
+) {
+    const { promise } = props.message
+    const { loading, error, value } = useAsync(() => promise, [promise])
+
+    return renderWithMetadata(
+        props,
+        loading ? (
+            <DefaultTypedMessageTextRenderer {...props} message={makeTypedMessageText('Loading...')} />
+        ) : error ? (
+            <DefaultTypedMessageTextRenderer {...props} message={makeTypedMessageText('Error!')} />
+        ) : (
+            <DefaultTypedMessageRenderer {...props} message={value!} />
+        ),
+    )
+})
+registerTypedMessageRenderer('suspended', {
+    component: DefaultTypedMessageSuspendedRenderer,
+    id: 'maskbook.suspended',
+    priority: 0,
 })
 
 function DefaultMetadataRender() {
@@ -138,12 +200,12 @@ const RenderText = React.memo(function RenderText(props: { text: string }) {
 })
 
 function parseText(string: string) {
-    const links: { raw: string; protocol: string; encoded: string }[] = anchorme(string, { list: true })
+    const links = anchorme.list(string)
     let current = string
     const result = []
     while (current.length) {
         const search1 = current.search('\n')
-        const search2 = links[0] ? current.search(links[0].raw) : -1
+        const search2 = links[0] ? current.search(links[0].string) : -1
         // ? if rest is normal
         if (search1 === -1 && search2 === -1) {
             result.push(current)
@@ -156,14 +218,15 @@ function parseText(string: string) {
         }
         // ? if rest have links but no \n
         if ((search2 < search1 && search2 !== -1) || search1 === -1) {
-            const link = links[0].protocol + links[0].encoded
+            let link = links[0].string
+            if (!links[0].protocol) link = 'http://' + link
             result.push(
                 current.substring(0, search2),
                 <Link color="textPrimary" target="_blank" rel="noopener noreferrer" href={link} key={link}>
-                    {links[0].raw}
+                    {links[0].string}
                 </Link>,
             )
-            current = current.substring(search2 + links[0].raw.length)
+            current = current.substring(search2 + links[0].string.length)
             links.shift()
         }
     }

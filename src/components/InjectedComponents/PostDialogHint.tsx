@@ -2,13 +2,12 @@ import React from 'react'
 import { Card, Typography, Button } from '@material-ui/core'
 import { useI18N } from '../../utils/i18n-next-ui'
 import { makeStyles } from '@material-ui/core/styles'
-import { useStylesExtends, or } from '../custom-ui-helper'
+import { useStylesExtends } from '../custom-ui-helper'
 import { useMyIdentities } from '../DataSource/useActivatedUI'
-import type { Profile } from '../../database'
 import type { BannerProps } from '../Welcomes/Banner'
 import { NotSetupYetPrompt } from '../shared/NotSetupYetPrompt'
 import { useValueRef } from '../../utils/hooks/useValueRef'
-import { currentImmersiveSetupStatus } from '../../settings/settings'
+import { currentSetupGuideStatus } from '../../settings/settings'
 import { getActivatedUI } from '../../social-network/ui'
 
 const useStyles = makeStyles((theme) => ({
@@ -49,7 +48,6 @@ export const PostDialogHintUI = React.memo(function PostDialogHintUI(props: Post
                 <Button
                     className={classes.button}
                     variant="contained"
-                    color="primary"
                     onClick={props.onHintButtonClicked}
                     data-testid="hint_button">
                     {t('post_modal_hint__button')}
@@ -60,16 +58,12 @@ export const PostDialogHintUI = React.memo(function PostDialogHintUI(props: Post
 })
 
 export interface PostDialogHintProps extends Partial<PostDialogHintUIProps> {
-    identities?: Profile[]
     NotSetupYetPromptProps?: Partial<BannerProps>
 }
 export function PostDialogHint(props: PostDialogHintProps) {
-    const identities = or(props.identities, useMyIdentities())
-    const ui = <PostDialogHintUI onHintButtonClicked={() => {}} {...props} />
-
-    const connecting = useValueRef(currentImmersiveSetupStatus[getActivatedUI().networkIdentifier])
-
+    const identities = useMyIdentities()
+    const connecting = useValueRef(currentSetupGuideStatus[getActivatedUI().networkIdentifier])
     if (connecting) return null
     if (identities.length === 0) return <NotSetupYetPrompt {...props.NotSetupYetPromptProps} />
-    return ui
+    return <PostDialogHintUI onHintButtonClicked={() => {}} {...props} />
 }

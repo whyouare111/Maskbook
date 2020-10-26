@@ -10,14 +10,14 @@ class Facebook implements SNS {
     // selectors
     composeButtonSelector = '#feedx_sprouts_container textarea'
     composeImageSelector = '#feedx_sprouts_container .fbScrollableArea img'
-    composeEditorSelector = '#feedx_sprouts_container [contenteditable="true"]'
+    composeEditorSelector = '#feedx_sprouts_container textarea, #feedx_sprouts_container [contenteditable="true"]'
     profileSelector = '#profile_timeline_intro_card'
     bioTextareaSelector = 'textarea[name="bio"]'
     commentInputSelector = '.userContentWrapper form.commentable_item form [contenteditable="true"]'
 
     setupGuideSelector = 'body > span'
     postDialogHintSelector = '#pagelet_composer [role="button"] + span'
-    postDialogModalSelector = 'body > div[aria-hidden="true"]:not([class]):not([style])'
+    postDialogModalSelector = 'body > div:not([class]):not([style])'
     postAffixingCanvasSelector = '[data-testid="post_message"] + span'
     commentSelector =
         '.userContentWrapper form.commentable_item .accessible_elem ~ ul > li:first-child [data-ft] + span'

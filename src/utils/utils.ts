@@ -2,13 +2,13 @@
  * Prefer function declaration than const f = () => ...
  * in this file please.
  */
-import { CustomEventId } from './constants'
-import type { CustomEvents } from '../extension/injected-script/addEventListener'
+import { CustomEventId, WALLET_OR_PERSONA_NAME_MAX_LEN } from './constants'
+import type { CustomEvents } from '../extension/injected-script/CustomEvents'
 
-import { flatten, isNull, random } from 'lodash-es'
+import { flatten, isNull, random, noop } from 'lodash-es'
 
-import { sleep } from '@holoflows/kit/es/util/sleep'
-export { sleep, timeout } from '@holoflows/kit/es/util/sleep'
+import { sleep } from '@dimensiondev/holoflows-kit/es/util/sleep'
+export { sleep, timeout } from '@dimensiondev/holoflows-kit/es/util/sleep'
 
 export function randomElement(arr: unknown[]) {
     const e = flatten(arr)
@@ -26,7 +26,7 @@ export function getUrl(path: string, fallback: string = '') {
 }
 
 /**
- * Download given url return as ArrayBuffer
+ * Download given url return as Blob
  */
 export async function downloadUrl(url: string) {
     try {
@@ -36,15 +36,20 @@ export async function downloadUrl(url: string) {
     } catch {}
     const res = await fetch(url)
     if (!res.ok) throw new Error('Fetch failed.')
-    return res.arrayBuffer()
+    return res.blob()
 }
 
 /**
  * Dispatch a fake event.
+ * @param element The event target
  * @param event Event name
  * @param x parameters
  */
-export function dispatchCustomEvents<T extends keyof CustomEvents>(event: T, ...x: CustomEvents[T]) {
+export function dispatchCustomEvents<T extends keyof CustomEvents>(
+    element: Element | Document | null = document,
+    event: T,
+    ...x: CustomEvents[T]
+) {
     document.dispatchEvent(new CustomEvent(CustomEventId, { detail: JSON.stringify([event, x]) }))
 }
 
@@ -53,7 +58,7 @@ export function dispatchCustomEvents<T extends keyof CustomEvents>(event: T, ...
  * @param bytes
  */
 export function pasteImageToActiveElements(bytes: Uint8Array) {
-    return dispatchCustomEvents('paste', { type: 'image', value: Array.from(bytes) })
+    return dispatchCustomEvents(document.activeElement, 'paste', { type: 'image', value: Array.from(bytes) })
 }
 
 Object.assign(globalThis, { dispatchCustomEvents })
@@ -71,9 +76,6 @@ export function selectElementContents(el: Node) {
     return sel
 }
 
-import { noop } from 'lodash-es'
-export { noop as nop } from 'lodash-es'
-export { identity as bypass } from 'lodash-es'
 export function nopWithUnmount(..._args: unknown[]) {
     return noop
 }
@@ -206,9 +208,7 @@ export function addUint8Array(a: ArrayBuffer, b: ArrayBuffer) {
 import anchorme from 'anchorme'
 import Services from '../extension/service'
 export function parseURL(string: string) {
-    // TODO: upgrade to anchorme 2
-    const links: { raw: string; protocol: string; encoded: string }[] = anchorme(string, { list: true })
-    return links.map((x) => x.raw)
+    return anchorme.list(string).map((x) => x.string)
 }
 /**
  * !!!! Please use the Promise constructor if possible
@@ -239,4 +239,8 @@ export function hex2buf(hex: string) {
 export function assert(x: any, ...args: any): asserts x {
     console.assert(x, ...args)
     if (!x) throw new Error('Assert failed!')
+}
+
+export function checkInputLengthExceed(name: string) {
+    return Array.from(name).length >= WALLET_OR_PERSONA_NAME_MAX_LEN
 }

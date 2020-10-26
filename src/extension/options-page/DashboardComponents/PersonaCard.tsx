@@ -9,13 +9,13 @@ import { useColorStyles } from '../../../utils/theme'
 import { useI18N } from '../../../utils/i18n-next-ui'
 import ProfileBox from './ProfileBox'
 import type { ProfileIdentifier } from '../../../database/type'
-import { useModal, useSnackbarCallback } from '../Dialogs/Base'
+import { useModal } from '../DashboardDialogs/Base'
 import {
     DashboardPersonaRenameDialog,
     DashboardPersonaBackupDialog,
     DashboardPersonaDeleteConfirmDialog,
-} from '../Dialogs/Persona'
-import DashboardMenu from './DashboardMenu'
+} from '../DashboardDialogs/Persona'
+import { useMenu } from '../../../utils/hooks/useMenu'
 
 interface Props {
     persona: Persona
@@ -34,7 +34,7 @@ const useStyles = makeStyles((theme) =>
                     ? 'none'
                     : '0px 2px 4px rgba(96, 97, 112, 0.16), 0px 0px 1px rgba(40, 41, 61, 0.04)',
 
-            [theme.breakpoints.down('xs')]: {
+            [theme.breakpoints.down('sm')]: {
                 width: '100%',
                 marginRight: 0,
             },
@@ -69,18 +69,13 @@ export default function PersonaCard({ persona }: Props) {
     const [backupPersona, openBackupPersona] = useModal(DashboardPersonaBackupDialog, { persona })
     const [renamePersona, openRenamePersona] = useModal(DashboardPersonaRenameDialog, { persona })
 
-    const menus = useMemo(
-        () => [
-            <MenuItem onClick={openRenamePersona}>{t('rename')}</MenuItem>,
-            <MenuItem onClick={openBackupPersona}>{t('backup')}</MenuItem>,
-            <MenuItem onClick={openDeletePersona} className={color.error} data-testid="delete_button">
-                {t('delete')}
-            </MenuItem>,
-        ],
-        [t, openBackupPersona, openDeletePersona, color.error],
+    const [menu, openMenu] = useMenu(
+        <MenuItem onClick={openRenamePersona}>{t('rename')}</MenuItem>,
+        <MenuItem onClick={openBackupPersona}>{t('backup')}</MenuItem>,
+        <MenuItem onClick={openDeletePersona} className={color.error} data-testid="delete_button">
+            {t('delete')}
+        </MenuItem>,
     )
-
-    const [menu, , openMenu] = useModal(DashboardMenu, { menus })
 
     const id = persona.linkedProfiles.keys().next().value as ProfileIdentifier | undefined
     React.useEffect(() => {
@@ -100,11 +95,7 @@ export default function PersonaCard({ persona }: Props) {
                     <span title={persona.nickname} className={classes.title} data-testid="persona_title">
                         {persona.nickname}
                     </span>
-                    <IconButton
-                        size="small"
-                        className={classes.menu}
-                        onClick={(e) => openMenu({ anchorEl: e.currentTarget })}
-                        data-testid="setting_icon">
+                    <IconButton size="small" className={classes.menu} onClick={openMenu} data-testid="setting_icon">
                         <MoreVertIcon />
                     </IconButton>
                     {menu}

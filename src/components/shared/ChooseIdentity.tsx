@@ -1,15 +1,12 @@
 import React, { useCallback, useState } from 'react'
 import { makeStyles } from '@material-ui/core/styles'
-import ExpansionPanel from '@material-ui/core/ExpansionPanel'
-import ExpansionPanelSummary from '@material-ui/core/ExpansionPanelSummary'
 import ExpandMoreIcon from '@material-ui/icons/ExpandMore'
 import type { Profile } from '../../database'
-import { List } from '@material-ui/core'
-import { PersonOrGroupInList, PersonOrGroupInListProps } from './SelectPeopleAndGroups'
+import { List, Accordion, AccordionSummary } from '@material-ui/core'
+import { ProfileOrGroupInList, ProfileOrGroupInListProps } from './SelectPeopleAndGroups'
 import { getActivatedUI } from '../../social-network/ui'
 import { useCurrentIdentity, useMyIdentities } from '../DataSource/useActivatedUI'
 import { ProfileIdentifier } from '../../database/type'
-import { useI18N } from '../../utils/i18n-next-ui'
 import { currentSelectedIdentity } from '../../settings/settings'
 import { useStylesExtends } from '../custom-ui-helper'
 
@@ -36,7 +33,7 @@ const useStyles = makeStyles({
     },
 })
 
-const useExpansionPanelSummaryStyle = makeStyles({
+const useAccordionSummaryStyle = makeStyles({
     root: {
         padding: 0,
     },
@@ -66,52 +63,54 @@ export interface ChooseIdentityProps extends withClasses<KeysInferFromUseStyles<
     /** All available identities
      * @defaultValue `useMyIdentities()`
      */
-    availableIdentities?: Profile[]
+    identities: Profile[]
     /** When user change the identity
      *  @defaultValue will change the global selected identity
      */
     onChangeIdentity?(person: Profile): void
-    PersonOrGroupInListProps?: PersonOrGroupInListProps
+    PersonOrGroupInListProps?: ProfileOrGroupInListProps
 }
 /**
  * Choose the current using identity.
  */
-export const ChooseIdentity: React.FC<ChooseIdentityProps> = (props) => {
+export function ChooseIdentity(props: ChooseIdentityProps) {
+    const { identities } = props
+
     const classes = useStylesExtends(useStyles(), props)
-    const expansionPanelSummaryClasses = useStylesExtends(useExpansionPanelSummaryStyle(), props)
-    const [expanded, setExpanded] = React.useState<boolean>(false)
+    const expansionPanelSummaryClasses = useStylesExtends(useAccordionSummaryStyle(), props)
+    const [expanded, setExpanded] = useState(false)
 
-    const all = useMyIdentities()
-    const currentDefault =
-        useCurrentIdentity() || ({ identifier: ProfileIdentifier.unknown, nickname: 'Nothing' } as Profile)
-    const { availableIdentities = all, current = currentDefault } = props
+    const ui = getActivatedUI()
+    const current = useCurrentIdentity() || ({ identifier: ProfileIdentifier.unknown, nickname: 'Nothing' } as Profile)
 
-    const handleChange = useCallback(() => {
-        if (availableIdentities.length > 1) setExpanded(!expanded)
-    }, [availableIdentities.length, expanded])
+    const onChange = useCallback(() => {
+        if (identities.length > 1) setExpanded(!expanded)
+    }, [identities.length, expanded])
 
     return (
         <div className={classes.root}>
-            <ExpansionPanel classes={{ root: classes.expansionPanelRoot }} expanded={expanded} onChange={handleChange}>
-                <ExpansionPanelSummary
+            <Accordion classes={{ root: classes.expansionPanelRoot }} expanded={expanded} onChange={onChange}>
+                <AccordionSummary
                     classes={expansionPanelSummaryClasses}
-                    expandIcon={availableIdentities.length > 1 ? <ExpandMoreIcon /> : null}>
-                    <PersonOrGroupInList
-                        ListItemProps={{ dense: true, classes: { root: classes.listItemRoot } }}
+                    expandIcon={identities.length > 1 ? <ExpandMoreIcon /> : null}>
+                    <ProfileOrGroupInList
                         item={current}
-                        {...props.PersonOrGroupInListProps}></PersonOrGroupInList>
-                </ExpansionPanelSummary>
-                {availableIdentities.length ? (
+                        ListItemProps={{ dense: true, classes: { root: classes.listItemRoot } }}
+                        {...props.PersonOrGroupInListProps}
+                    />
+                </AccordionSummary>
+                {identities.length ? (
                     <List classes={{ root: classes.list }}>
-                        {availableIdentities.map((person) =>
+                        {identities.map((person) =>
                             person.identifier.equals(current.identifier) ? null : (
-                                <PersonOrGroupInList
-                                    ListItemProps={{ dense: true, classes: { root: classes.listItemRoot } }}
-                                    item={person}
+                                <ProfileOrGroupInList
                                     key={person.identifier.toText()}
+                                    item={person}
+                                    ListItemProps={{ dense: true, classes: { root: classes.listItemRoot } }}
                                     onClick={() => {
                                         setExpanded(false)
-                                        props.onChangeIdentity!(person)
+                                        ui.currentIdentity.value = person
+                                        currentSelectedIdentity[ui.networkIdentifier].value = person.identifier.toText()
                                     }}
                                     {...props.PersonOrGroupInListProps}
                                 />
@@ -119,18 +118,11 @@ export const ChooseIdentity: React.FC<ChooseIdentityProps> = (props) => {
                         )}
                     </List>
                 ) : null}
-            </ExpansionPanel>
+            </Accordion>
         </div>
     )
 }
 
-ChooseIdentity.defaultProps = {
-    onChangeIdentity(person) {
-        const ui = getActivatedUI()
-        ui.currentIdentity.value = person
-        currentSelectedIdentity[ui.networkIdentifier].value = person.identifier.toText()
-    },
-}
 /**
  * This hook allows use <ChooseIdentity /> in a isolated scope without providing
  * verbose information.
@@ -138,10 +130,10 @@ ChooseIdentity.defaultProps = {
 export function useIsolatedChooseIdentity(): readonly [Profile | null, React.ReactNode] {
     const all = useMyIdentities()
     const whoami = useCurrentIdentity()
-    const [current, set] = useState<Profile>()
+    const [current, setCurrent] = useState<Profile>()
     const selected = current || whoami || undefined
     return [
         selected || null,
-        <ChooseIdentity current={selected} availableIdentities={all} onChangeIdentity={set} />,
+        <ChooseIdentity current={selected} identities={all} onChangeIdentity={setCurrent} />,
     ] as const
 }

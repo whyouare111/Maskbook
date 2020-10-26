@@ -1,11 +1,13 @@
 import React from 'react'
 import type { PostInfo } from '../PostInfo'
-import { DOMProxy, MutationObserverWatcher, ValueRef } from '@holoflows/kit/es'
-import { renderInShadowRoot } from '../../utils/jss/renderInShadowRoot'
+import { MutationObserverWatcher, ValueRef } from '@dimensiondev/holoflows-kit/es'
+import { renderInShadowRoot } from '../../utils/shadow-root/renderInShadowRoot'
 import { PostComment, PostCommentProps } from '../../components/InjectedComponents/PostComments'
-import { nop } from '../../utils/utils'
 import { makeStyles } from '@material-ui/core'
-import { PostInfoContext, usePostInfoDetails } from '../../components/DataSource/usePostInfo'
+import { PostInfoContext } from '../../components/DataSource/usePostInfo'
+import { Flags } from '../../utils/flags'
+import { noop } from 'lodash-es'
+import { collectNodeText } from '../../social-network-provider/facebook.com/UI/collectPosts'
 
 interface injectPostCommentsDefaultConfig {
     needZip?(): void
@@ -28,10 +30,10 @@ export function injectPostCommentsDefault<T extends string>(
     })
     return function injectPostComments(current: PostInfo) {
         const selector = current.commentsSelector
-        if (!selector) return nop
+        if (!selector) return noop
         const commentWatcher = new MutationObserverWatcher(selector, current.rootNode)
             .useForeach((commentNode, key, meta) => {
-                const commentRef = new ValueRef(commentNode.innerText)
+                const commentRef = new ValueRef(collectNodeText(commentNode))
                 const needZipF =
                     needZip ||
                     (() => {
@@ -44,19 +46,20 @@ export function injectPostCommentsDefault<T extends string>(
                     </PostInfoContext.Provider>,
                     { normal: () => meta.after, shadow: () => meta.afterShadow },
                 )
+                commentRef.addListener(console.log)
                 return {
                     onNodeMutation() {
-                        commentRef.value = commentNode.innerText
+                        commentRef.value = collectNodeText(commentNode)
                     },
                     onTargetChanged() {
-                        commentRef.value = commentNode.innerText
+                        commentRef.value = collectNodeText(commentNode)
                     },
                     onRemove() {
                         unmount()
                     },
                 }
             })
-            .setDOMProxyOption({ afterShadowRootInit: { mode: webpackEnv.shadowRootMode } })
+            .setDOMProxyOption({ afterShadowRootInit: { mode: Flags.using_ShadowDOM_attach_mode } })
             .startWatch({
                 childList: true,
                 subtree: true,

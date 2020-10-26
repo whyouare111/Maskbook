@@ -28,16 +28,18 @@ export interface AbstractTabProps {
 export default function AbstractTab({ tabs, state, height = 200 }: AbstractTabProps) {
     const classes = useStyles()
     const [value, setValue] = state
+    const tabIndicatorStyle = tabs.length ? { width: 100 / tabs.length + '%' } : undefined
 
     return (
         <>
             <Paper square elevation={0}>
                 <Tabs
                     value={value}
+                    TabIndicatorProps={{ style: tabIndicatorStyle }}
                     variant="fullWidth"
                     indicatorColor="primary"
                     textColor="primary"
-                    onChange={(_: React.ChangeEvent<{}>, newValue: number) => setValue(newValue)}>
+                    onChange={(_: React.SyntheticEvent, newValue: number) => setValue(newValue)}>
                     {tabs.map((tab) => (
                         <Tab
                             className={classes.tab}

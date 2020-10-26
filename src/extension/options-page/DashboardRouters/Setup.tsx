@@ -25,7 +25,7 @@ import useQueryParams from '../../../utils/hooks/useQueryParams'
 import { useAsync } from 'react-use'
 import { Identifier, ECKeyIdentifier } from '../../../database/type'
 import { useI18N } from '../../../utils/i18n-next-ui'
-import { useMyPersonas, useMyUninitializedPersonas } from '../../../components/DataSource/independent'
+import { useMyPersonas, useMyUninitializedPersonas } from '../../../components/DataSource/useMyPersonas'
 import { UpgradeBackupJSONFile, BackupJSONFileLatest } from '../../../utils/type-transform/BackupFormat/JSON/latest'
 import { decompressBackupFile } from '../../../utils/type-transform/BackupFileShortRepresentation'
 import { extraPermissions } from '../../../utils/permissions'
@@ -41,9 +41,11 @@ import { DatabaseRecordType, DatabasePreviewCard } from '../DashboardComponents/
 import { RestoreFromQRCodeCameraBox } from '../DashboardComponents/RestoreFromQRCodeCameraBox'
 import { sleep } from '../../../utils/utils'
 import { SetupStep } from '../SetupStep'
+import { Flags } from '../../../utils/flags'
+import { currentSelectedWalletAddressSettings } from '../../../plugins/Wallet/settings'
 
 //#region setup form
-const useSetupFormSetyles = makeStyles((theme) =>
+const useSetupFormStyles = makeStyles((theme) =>
     createStyles({
         wrapper: {
             flex: 1,
@@ -62,7 +64,7 @@ const useSetupFormSetyles = makeStyles((theme) =>
             fontSize: 39,
             lineHeight: 1,
             marginBottom: theme.spacing(2),
-            [theme.breakpoints.down('xs')]: {
+            [theme.breakpoints.down('sm')]: {
                 fontSize: 18,
                 margin: theme.spacing(3, 0, 1),
             },
@@ -72,7 +74,7 @@ const useSetupFormSetyles = makeStyles((theme) =>
             fontSize: 20,
             lineHeight: 1.5,
             marginBottom: theme.spacing(5),
-            [theme.breakpoints.down('xs')]: {
+            [theme.breakpoints.down('sm')]: {
                 fontSize: 14,
                 marginBottom: theme.spacing(2),
             },
@@ -80,7 +82,7 @@ const useSetupFormSetyles = makeStyles((theme) =>
         form: {
             width: 368,
             minHeight: 200,
-            [theme.breakpoints.down('xs')]: {
+            [theme.breakpoints.down('sm')]: {
                 width: '100%',
             },
         },
@@ -90,7 +92,7 @@ const useSetupFormSetyles = makeStyles((theme) =>
         or: {
             marginTop: 28,
             marginBottom: 10,
-            [theme.breakpoints.down('xs')]: {
+            [theme.breakpoints.down('sm')]: {
                 margin: 0,
             },
         },
@@ -108,7 +110,7 @@ const useSetupFormSetyles = makeStyles((theme) =>
         doneButton: {
             color: '#fff',
             backgroundColor: green[500],
-            // extra 36 pixel eliminats the visual shaking when switch between pages
+            // extra 36 pixel eliminates the visual shaking when switch between pages
             marginBottom: 20 + 36,
             '&:hover': {
                 backgroundColor: green[700],
@@ -117,7 +119,7 @@ const useSetupFormSetyles = makeStyles((theme) =>
     }),
 )
 
-interface SetupFormProps extends withClasses<KeysInferFromUseStyles<typeof useSetupFormSetyles>> {
+interface SetupFormProps extends withClasses<KeysInferFromUseStyles<typeof useSetupFormStyles>> {
     primary: string
     secondary?: string
     content?: React.ReactNode
@@ -125,7 +127,7 @@ interface SetupFormProps extends withClasses<KeysInferFromUseStyles<typeof useSe
 }
 
 function SetupForm(props: SetupFormProps) {
-    const classes = useStylesExtends(useSetupFormSetyles(), props)
+    const classes = useStylesExtends(useSetupFormStyles(), props)
     return (
         <Fade in>
             <div className={classes.wrapper}>
@@ -153,6 +155,7 @@ function SetupForm(props: SetupFormProps) {
 const useConsentDataCollectionStyles = makeStyles((theme) =>
     createStyles({
         form: {
+            color: theme.palette.text.primary,
             fontSize: 16,
             lineHeight: 1.75,
             width: 660,
@@ -160,6 +163,7 @@ const useConsentDataCollectionStyles = makeStyles((theme) =>
             marginTop: 78,
         },
         label: {
+            color: theme.palette.text.primary,
             marginBottom: 32,
         },
         button: {
@@ -170,7 +174,7 @@ const useConsentDataCollectionStyles = makeStyles((theme) =>
 
 export function ConsentDataCollection() {
     const { t } = useI18N()
-    const setupFormClasses = useSetupFormSetyles()
+    const setupFormClasses = useSetupFormStyles()
     const consentDataCollection = useConsentDataCollectionStyles()
     const [checked, setChecked] = useState(false)
     return (
@@ -200,12 +204,12 @@ export function ConsentDataCollection() {
                                     rel="noopener noreferrer">
                                     {t('set_up_consent_data_collection_privacy_policy_2')}
                                 </MuiLink>
+                                {t('set_up_consent_data_collection_privacy_policy_3')}
                             </>
                         }
                     />
                     <ActionButton<typeof Link>
                         className={consentDataCollection.button}
-                        color="primary"
                         variant="contained"
                         component={Link}
                         disabled={!checked}
@@ -230,7 +234,7 @@ const userCreatePersonaStyles = makeStyles((theme) =>
 
 export function CreatePersona() {
     const { t } = useI18N()
-    const setupFormClasses = useSetupFormSetyles()
+    const setupFormClasses = useSetupFormStyles()
     const createPersonaClasses = userCreatePersonaStyles()
     const [name, setName] = useState('')
     const history = useHistory<unknown>()
@@ -273,7 +277,6 @@ export function CreatePersona() {
                     <ActionButton
                         className={setupFormClasses.button}
                         variant="contained"
-                        color="primary"
                         onClick={createPersonaAndNext}
                         disabled={!name}
                         data-testid="next_button">
@@ -283,7 +286,6 @@ export function CreatePersona() {
                         {t('set_up_tip_or')}
                     </Typography>
                     <ActionButton<typeof Link>
-                        color="primary"
                         variant="text"
                         component={Link}
                         to={SetupStep.RestoreDatabase}
@@ -307,7 +309,7 @@ const useProviderLineStyle = makeStyles((theme: Theme) => ({
 
 export function ConnectNetwork() {
     const { t } = useI18N()
-    const classes = useSetupFormSetyles()
+    const classes = useSetupFormStyles()
     const providerLineClasses = useProviderLineStyle()
     const history = useHistory<unknown>()
 
@@ -316,14 +318,17 @@ export function ConnectNetwork() {
     const initializedPersonas = useMyPersonas()
     const uninitializedPersonas = useMyUninitializedPersonas()
     const { identifier } = useQueryParams(['identifier'])
-
-    const { value = null, loading, error } = useAsync(
-        async () =>
-            identifier
-                ? Services.Identity.queryPersona(Identifier.fromString(identifier, ECKeyIdentifier).unwrap())
-                : null,
-        [identifier, initializedPersonas, uninitializedPersonas],
-    )
+    const { value = null, loading, error } = useAsync(async () => {
+        const persona = initializedPersonas.find((x) => x.identifier.toText() === identifier)
+        // auto-finished by setup guide
+        if (persona?.linkedProfiles.size) {
+            history.replace(Flags.has_no_browser_tab_ui ? DashboardRoute.Nav : DashboardRoute.Personas)
+            return null
+        }
+        return identifier
+            ? Services.Identity.queryPersona(Identifier.fromString(identifier, ECKeyIdentifier).unwrap())
+            : null
+    }, [identifier, initializedPersonas, uninitializedPersonas])
 
     // update persona when link/unlink really happen
     if (!loading && value?.linkedProfiles.size !== persona?.linkedProfiles.size) setPersona(value)
@@ -353,28 +358,23 @@ export function ConnectNetwork() {
                     <ActionButton
                         className={classes.button}
                         variant="contained"
-                        color="primary"
                         disabled={persona?.linkedProfiles.size === 0}
                         onClick={async () => {
-                            await Promise.all([
+                            const [_, address] = await Promise.all([
                                 Services.Identity.setupPersona(persona.identifier),
                                 Services.Plugin.invokePlugin('maskbook.wallet', 'importFirstWallet', {
                                     name: persona.nickname ?? t('untitled_wallet'),
                                     mnemonic: persona.mnemonic?.words.split(' '),
                                     passphrase: '',
-                                    _wallet_is_default: true,
                                 }),
                             ])
+                            if (address) currentSelectedWalletAddressSettings.value = address
                             await sleep(300)
-                            history.replace(
-                                webpackEnv.perferResponsiveTarget === 'xs'
-                                    ? DashboardRoute.Nav
-                                    : DashboardRoute.Personas,
-                            )
+                            history.replace(Flags.has_no_browser_tab_ui ? DashboardRoute.Nav : DashboardRoute.Personas)
                         }}>
                         {t('set_up_button_finish')}
                     </ActionButton>
-                    <ActionButton variant="text" onClick={() => history.goBack()}>
+                    <ActionButton color="inherit" variant="text" onClick={() => history.goBack()}>
                         {t('set_up_button_cancel')}
                     </ActionButton>
                 </>
@@ -401,7 +401,7 @@ const useRestoreDatabaseStyle = makeStyles((theme) =>
                 overflow: 'auto !important',
                 height: '100% !important',
             },
-            [theme.breakpoints.down('xs')]: {
+            [theme.breakpoints.down('sm')]: {
                 padding: theme.spacing(2),
             },
         },
@@ -420,7 +420,7 @@ const useRestoreDatabaseStyle = makeStyles((theme) =>
 export function RestoreDatabase() {
     const { t } = useI18N()
     const history = useHistory<unknown>()
-    const classes = useSetupFormSetyles()
+    const classes = useSetupFormStyles()
     const restoreDatabaseClasses = useRestoreDatabaseStyle()
     const { enqueueSnackbar, closeSnackbar } = useSnackbar()
 
@@ -502,7 +502,6 @@ export function RestoreDatabase() {
                 <>
                     <ActionButton
                         className={classNames(classes.button, classes.restoreButton)}
-                        color="primary"
                         variant="contained"
                         disabled={
                             (!(state[0] === 0 && backupValue) && !(state[0] === 1 && textValue)) ||
@@ -516,7 +515,6 @@ export function RestoreDatabase() {
                     </ActionButton>
                     <ActionButton<typeof Link>
                         className={classes.button}
-                        color="primary"
                         variant="outlined"
                         component={Link}
                         to={SetupStep.RestoreDatabaseAdvance}
@@ -526,11 +524,7 @@ export function RestoreDatabase() {
                     <Typography className={classes.or} variant="body1">
                         {t('set_up_tip_or')}
                     </Typography>
-                    <ActionButton
-                        color="primary"
-                        variant="text"
-                        onClick={() => history.goBack()}
-                        data-testid="restart_button">
+                    <ActionButton variant="text" onClick={() => history.goBack()} data-testid="restart_button">
                         {t('set_up_button_from_scratch')}
                     </ActionButton>
                 </>
@@ -546,7 +540,7 @@ export function RestoreDatabaseAdvance() {
     const { enqueueSnackbar } = useSnackbar()
     const history = useHistory<unknown>()
 
-    const classes = useSetupFormSetyles()
+    const classes = useSetupFormStyles()
 
     const [nickname, setNickname] = useState('')
     const [mnemonicWordsValue, setMnemonicWordsValue] = useState('')
@@ -564,7 +558,7 @@ export function RestoreDatabaseAdvance() {
             if (persona) {
                 history.push(
                     persona.linkedProfiles.size
-                        ? webpackEnv.perferResponsiveTarget === 'xs'
+                        ? Flags.has_no_browser_tab_ui
                             ? DashboardRoute.Nav
                             : DashboardRoute.Personas
                         : `${SetupStep.ConnectNetwork}?identifier=${encodeURIComponent(persona.identifier.toText())}`,
@@ -587,6 +581,7 @@ export function RestoreDatabaseAdvance() {
                             onChange={(e) => setNickname(e.target.value)}
                             value={nickname}
                             required
+                            autoFocus
                             label={t('name')}
                             inputProps={{
                                 'data-testid': 'username_input',
@@ -619,6 +614,7 @@ export function RestoreDatabaseAdvance() {
                     <TextField
                         multiline
                         rows={1}
+                        autoFocus
                         placeholder={t('dashboard_paste_database_base64_hint')}
                         onChange={(e) => setBase64Value(e.target.value)}
                         value={base64Value}
@@ -675,7 +671,6 @@ export function RestoreDatabaseAdvance() {
                     <ActionButton
                         className={classNames(classes.button, classes.importButton)}
                         variant="contained"
-                        color="primary"
                         disabled={
                             !(tabState === 0 && nickname && mnemonicWordsValue) &&
                             !(tabState === 1 && base64Value) &&
@@ -699,7 +694,11 @@ export function RestoreDatabaseAdvance() {
                         data-testid="import_button">
                         {t('set_up_button_import')}
                     </ActionButton>
-                    <ActionButton variant="text" onClick={() => history.goBack()} data-testid="cancel_button">
+                    <ActionButton
+                        color="inherit"
+                        variant="text"
+                        onClick={() => history.goBack()}
+                        data-testid="cancel_button">
                         {t('set_up_button_cancel')}
                     </ActionButton>
                 </>
@@ -720,7 +719,7 @@ const useRestoreDatabaseConfirmationStyles = makeStyles((theme: Theme) =>
             marginTop: 0,
             marginLeft: -32,
             marginBottom: 38,
-            [theme.breakpoints.down('xs')]: {
+            [theme.breakpoints.down('sm')]: {
                 width: '100%',
                 marginLeft: 0,
             },
@@ -737,7 +736,7 @@ const useRestoreDatabaseConfirmationStyles = makeStyles((theme: Theme) =>
 
 export function RestoreDatabaseConfirmation() {
     const { t } = useI18N()
-    const classes = useSetupFormSetyles()
+    const classes = useSetupFormStyles()
     const restoreDatabaseConfirmationClasses = useRestoreDatabaseConfirmationStyles()
     const history = useHistory<unknown>()
     const { enqueueSnackbar, closeSnackbar } = useSnackbar()
@@ -751,15 +750,17 @@ export function RestoreDatabaseConfirmation() {
     const profiles = backup?.profiles.length ?? 0
     const posts = backup?.posts.length ?? 0
     const contacts = backup?.userGroups.length ?? 0
+    const wallets = backup?.wallets.length ?? 0
     const records = [
         { type: DatabaseRecordType.Persona, length: personas, checked: imported === true },
         { type: DatabaseRecordType.Profile, length: profiles, checked: imported === true },
         { type: DatabaseRecordType.Post, length: posts, checked: imported === true },
         { type: DatabaseRecordType.Group, length: contacts, checked: imported === true },
+        { type: DatabaseRecordType.Wallet, length: wallets, checked: imported === true },
     ]
 
     const restoreFinish = async () => {
-        if (backup?.personas && personas === 1 && profiles === 0) {
+        if (backup?.personas.length && personas === 1 && profiles === 0) {
             history.push(`${SetupStep.ConnectNetwork}?identifier=${encodeURIComponent(backup.personas[0].identifier)}`)
         } else if (personas === 0 && profiles === 0) {
             history.replace(SetupStep.CreatePersona)
@@ -819,13 +820,12 @@ export function RestoreDatabaseConfirmation() {
                         <ActionButton
                             className={classes.button}
                             variant="contained"
-                            color="primary"
                             disabled={imported === 'loading'}
                             onClick={restoreConfirmation}
                             data-testid="confirm_button">
                             {t('set_up_button_confirm')}
                         </ActionButton>
-                        <ActionButton variant="text" onClick={() => history.goBack()}>
+                        <ActionButton color="inherit" variant="text" onClick={() => history.goBack()}>
                             {t('set_up_button_cancel')}
                         </ActionButton>
                     </>

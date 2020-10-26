@@ -1,4 +1,4 @@
-import { ProfileIdentifier } from '../database/type'
+import { sleep } from '../utils/utils'
 
 export const CryptoService: Partial<typeof import('./background-script/CryptoService')> = {
     async getMyProveBio() {
@@ -12,6 +12,7 @@ export const WelcomeService: Partial<typeof import('./background-script/WelcomeS
             grantedHostPermissions: [],
             personas: [],
             posts: [],
+            wallets: [],
             profiles: [],
             userGroups: [],
         }
@@ -26,14 +27,16 @@ export const SteganographyService: Partial<typeof import('./background-script/St
     },
 }
 
+export const HelperService: Partial<typeof import('./background-script/HelperService')> = {
+    async fetch(url) {
+        console.log('Fetching by mock')
+        await sleep(1000)
+        return globalThis.fetch(url).then((x) => x.blob())
+    },
+}
+
 export const PluginService: Partial<typeof import('./background-script/PluginService')> = {
     invokePlugin() {
         return new Promise(() => {})
-    },
-    async getManagedWallet() {
-        return {} as any
-    },
-    async getWallets() {
-        return { tokens: [], wallets: [] }
     },
 }

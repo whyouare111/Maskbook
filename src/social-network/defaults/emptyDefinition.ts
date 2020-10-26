@@ -1,10 +1,11 @@
-import { GetContext, ValueRef } from '@holoflows/kit/es'
+import { GetContext, ValueRef } from '@dimensiondev/holoflows-kit/es'
 import { ProfileIdentifier } from '../../database/type'
 import type { SocialNetworkUIDefinition } from '../ui'
-import { nop, nopWithUnmount } from '../../utils/utils'
+import { nopWithUnmount } from '../../utils/utils'
 import type { Profile } from '../../database'
 import { ProfileArrayComparer, GroupArrayComparer } from '../../utils/comparer'
 import { ObservableWeakMap } from '../../utils/ObservableMapSet'
+import { noop } from 'lodash-es'
 
 /**
  * DO NOT use this in content script
@@ -12,7 +13,8 @@ import { ObservableWeakMap } from '../../utils/ObservableMapSet'
 export const emptyDefinition: SocialNetworkUIDefinition = {
     acceptablePayload: ['latest'],
     friendlyName: '',
-    requestPermission: () => Promise.resolve(true),
+    hasPermission: async () => true,
+    requestPermission: async () => true,
     setupAccount: '',
     shouldActivate() {
         return false
@@ -28,10 +30,12 @@ export const emptyDefinition: SocialNetworkUIDefinition = {
     collectPosts() {},
     ignoreSetupAccount() {},
     injectCommentBox: nopWithUnmount,
-    injectPostBox: nop,
+    injectPostBox: noop,
     injectPostComments: nopWithUnmount,
+    injectPostReplacer: nopWithUnmount,
     injectPostInspector: nopWithUnmount,
-    resolveLastRecognizedIdentity: nop,
+    injectPageInspector: nopWithUnmount,
+    resolveLastRecognizedIdentity: noop,
     posts: new ObservableWeakMap(),
     friendsRef: new ValueRef([], ProfileArrayComparer),
     isDangerousNetwork: false,
@@ -46,14 +50,15 @@ export const emptyDefinition: SocialNetworkUIDefinition = {
     async taskGetProfile() {
         return { bioContent: '' }
     },
-    taskPasteIntoBio() {},
     taskPasteIntoPostBox() {},
+    taskOpenComposeBox() {},
     taskUploadToPostBox() {},
     taskUploadShuffledImageToPostBox() {},
     version: 1,
     gunNetworkHint: 'invalid-',
-    taskStartImmersiveSetup() {},
+    taskStartSetupGuide() {},
     taskGotoProfilePage() {},
+    taskGotoNewsFeedPage() {},
     getHomePage() {
         return ''
     },

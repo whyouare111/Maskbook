@@ -6,7 +6,7 @@ import type {
     IDBPObjectStore,
     IDBPCursorWithValueIteratorValue,
 } from 'idb/with-async-ittr-cjs'
-import { OnlyRunInContext } from '@holoflows/kit/es'
+import { OnlyRunInContext } from '@dimensiondev/holoflows-kit/es'
 
 export function createDBAccess<DBSchema>(opener: () => Promise<IDBPDatabase<DBSchema>>) {
     let db: IDBPDatabase<DBSchema> | undefined = undefined
@@ -14,7 +14,8 @@ export function createDBAccess<DBSchema>(opener: () => Promise<IDBPDatabase<DBSc
         OnlyRunInContext(['background', 'debugging'], 'Database')
         if (db) return db
         db = await opener()
-        db.addEventListener('close', (e) => (db = undefined))
+        db.addEventListener('close', () => (db = undefined))
+        db.addEventListener('error', () => (db = undefined))
         return db
     }
 }
@@ -63,8 +64,7 @@ export interface IDBPSafeObjectStore<
     DBTypes extends DBSchema,
     TxStores extends StoreNames<DBTypes>[] = StoreNames<DBTypes>[],
     StoreName extends StoreNames<DBTypes> = StoreNames<DBTypes>
->
-    extends Omit<
+> extends Omit<
         IDBPObjectStore<DBTypes, TxStores, StoreName> /** createIndex is only available in versionchange transaction */,
         | 'createIndex'
         /** deleteIndex is only available in versionchange transaction */

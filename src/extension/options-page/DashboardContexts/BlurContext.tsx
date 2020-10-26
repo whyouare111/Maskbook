@@ -2,6 +2,8 @@ import React, { useMemo, useContext, useEffect, useRef, useCallback } from 'reac
 import { makeStyles, createStyles, useTheme, useMediaQuery, Theme } from '@material-ui/core'
 import { useLocation } from 'react-router-dom'
 import { noop } from 'lodash-es'
+import { useMatchXS } from '../../../utils/hooks/useMatchXS'
+import { GetContext } from '@dimensiondev/holoflows-kit/es'
 
 const useStyles = makeStyles((theme) =>
     createStyles({
@@ -23,7 +25,11 @@ const DashboardBlurContext = React.createContext<{
 
 export function useBlurContext(open: boolean) {
     const context = useContext(DashboardBlurContext)
-    useEffect(() => (open ? context.blur() : context.unblur()), [context, open])
+    useEffect(() => {
+        // for options page only
+        if (GetContext() !== 'options') return
+        open ? context.blur() : context.unblur()
+    }, [context, open])
 }
 
 let blurRequest = 0
@@ -37,9 +43,7 @@ export function DashboardBlurContextUI({ children }: DashboardBlurContextUIProps
     const location = useLocation()
     const theme = useTheme()
     const ref = useRef<HTMLDivElement>(null!)
-    const xsMatched = useMediaQuery((theme: Theme) => theme.breakpoints.down('xs'), {
-        defaultMatches: webpackEnv.perferResponsiveTarget === 'xs',
-    })
+    const xsMatched = useMatchXS()
 
     const blur = useCallback(() => {
         blurRequest += 1

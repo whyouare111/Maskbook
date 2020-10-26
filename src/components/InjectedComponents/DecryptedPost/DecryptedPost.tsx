@@ -9,7 +9,7 @@ import type {
     SuccessDecryption,
 } from '../../../extension/background-script/CryptoServices/decryptFrom'
 import { deconstructPayload } from '../../../utils/type-transform/Payload'
-import type { TypedMessage } from '../../../extension/background-script/CryptoServices/utils'
+import type { TypedMessage } from '../../../protocols/typed-message'
 import { DecryptPostSuccess, DecryptPostSuccessProps } from './DecryptedPostSuccess'
 import { DecryptPostAwaitingProps, DecryptPostAwaiting } from './DecryptPostAwaiting'
 import { DecryptPostFailedProps, DecryptPostFailed } from './DecryptPostFailed'
@@ -17,6 +17,8 @@ import { DecryptedPostDebug } from './DecryptedPostDebug'
 import { usePostInfoDetails } from '../../DataSource/usePostInfo'
 import { asyncIteratorWithResult } from '../../../utils/type-transform/asyncIteratorHelpers'
 import { getActivatedUI } from '../../../social-network/ui'
+import { Err, Ok } from 'ts-results'
+import { or } from '../../custom-ui-helper'
 
 function progressReducer(
     state: { key: string; progress: SuccessDecryption | FailureDecryption | DecryptionProgress }[],
@@ -61,8 +63,12 @@ export interface DecryptPostProps {
 }
 export function DecryptPost(props: DecryptPostProps) {
     const { whoAmI, profiles, alreadySelectedPreviously, onDecrypted } = props
-    const postBy = usePostInfoDetails('postBy')
-    const postContent = usePostInfoDetails('postContent')
+    const deconstructedPayload = usePostInfoDetails('postPayload')
+    const authorInPayload = deconstructedPayload
+        .andThen((x) => (x.version === -38 ? Ok(x.authorUserID) : Err.EMPTY))
+        .unwrapOr(undefined)
+    const currentPostBy = usePostInfoDetails('postBy')
+    const postBy = or(authorInPayload, currentPostBy)
     const postMetadataImages = usePostInfoDetails('postMetadataImages')
     const Success = props.successComponent || DecryptPostSuccess
     const Awaiting = props.waitingComponent || DecryptPostAwaiting
@@ -76,9 +82,6 @@ export function DecryptPost(props: DecryptPostProps) {
             await sleep(1500)
         }
     }, [props.requestAppendRecipients, postBy, whoAmI])
-    const deconstructedPayload = useMemo(() => deconstructPayload(postContent, getActivatedUI().payloadDecoder), [
-        postContent,
-    ])
 
     //#region Debug info
     const [debugHash, setDebugHash] = useState<string>('Unknown')
@@ -92,10 +95,9 @@ export function DecryptPost(props: DecryptPostProps) {
 
     // pass 1:
     // decrypt post content and image attachments
-    const sharedPublic =
-        deconstructedPayload.ok && deconstructedPayload.val.version === -38
-            ? !!deconstructedPayload.val.sharedPublic
-            : false
+    const sharedPublic = deconstructedPayload
+        .andThen((x) => (x.version === -38 ? Ok(!!x.sharedPublic) : Err.EMPTY))
+        .unwrapOr(false)
     useEffect(() => {
         const controller = new AbortController()
         async function makeProgress(key: string, iter: ReturnType<typeof ServicesWithProgress.decryptFromText>) {
@@ -107,11 +109,7 @@ export function DecryptPost(props: DecryptPostProps) {
                 })
             for await (const status of asyncIteratorWithResult(iter)) {
                 if (controller.signal.aborted) return iter.return?.()
-                if (status.done) {
-                    // HACK: this is patch, hidden NOT VERIFIED in everyone
-                    if (sharedPublic && status.value.type !== 'error') status.value.signatureVerifyResult = true
-                    return refreshProgress(status.value)
-                }
+                if (status.done) return refreshProgress(status.value)
                 if (status.value.type === 'debug') {
                     switch (status.value.debug) {
                         case 'debug_finding_hash':
@@ -127,40 +125,53 @@ export function DecryptPost(props: DecryptPostProps) {
         }
 
         if (deconstructedPayload.ok)
-            makeProgress(postContent, ServicesWithProgress.decryptFromText(postContent, postBy, whoAmI, sharedPublic))
+            makeProgress(
+                'post text',
+                ServicesWithProgress.decryptFromText(deconstructedPayload.val, postBy, whoAmI, sharedPublic),
+            )
         postMetadataImages.forEach((url) => {
             if (controller.signal.aborted) return
             makeProgress(url, ServicesWithProgress.decryptFromImageUrl(url, postBy, whoAmI))
         })
         return () => controller.abort()
-    }, [postContent, postMetadataImages.join(), postBy.toText(), whoAmI.toText(), sharedPublic])
+    }, [
+        deconstructedPayload.ok,
+        (deconstructedPayload.val as any)?.encryptedText,
+        postBy.toText(),
+        postMetadataImages.join(),
+        sharedPublic,
+        whoAmI.toText(),
+    ])
 
     // pass 2:
     // decrypt rest attachments which depend on post content
-    const decryptedPostContent = progress.find((p) => p.key === postContent)
-    useEffect(() => {
-        if (decryptedPostContent?.progress.type !== 'success') return
-        // TODO:
-        // decrypt shuffled image here
-    }, [decryptedPostContent])
+    // const decryptedPostContent = progress.find((p) => p.key === postContent)
+    // useEffect(() => {
+    //     if (decryptedPostContent?.progress.type !== 'success') return
+    //     // TODO:
+    //     // decrypt shuffled image here
+    // }, [decryptedPostContent])
 
     // pass 3:
     // inovke callback
     const firstSucceedDecrypted = progress.find((p) => p.progress.type === 'success')
     useEffect(() => {
         if (firstSucceedDecrypted?.progress.type !== 'success') return
-        onDecrypted(firstSucceedDecrypted.progress.content, firstSucceedDecrypted.progress.rawContent)
-    }, [firstSucceedDecrypted])
+        const rawContent = firstSucceedDecrypted.progress.rawContent
+        typeof rawContent === 'string' && onDecrypted(firstSucceedDecrypted.progress.content, rawContent)
+    }, [firstSucceedDecrypted, onDecrypted])
     //#endregion
 
-    // the internal error should not display to the end-user
-    if (!deconstructedPayload.ok && progress.every((x) => x.progress.type === 'error' && x.progress.internalError))
-        return null
+    // it's not a secret post
+    if (!deconstructedPayload.ok && progress.every((x) => x.progress.internal)) return null
     return (
         <>
-            {progress.map(({ progress }, index) => (
-                <React.Fragment key={index}>{renderProgress(progress)}</React.Fragment>
-            ))}
+            {progress
+                // the internal progress should not display to the end-user
+                .filter(({ progress }) => !progress.internal)
+                .map(({ progress }, index) => (
+                    <React.Fragment key={index}>{renderProgress(progress)}</React.Fragment>
+                ))}
         </>
     )
 
@@ -175,13 +186,29 @@ export function DecryptPost(props: DecryptPostProps) {
                             requestAppendRecipients={requestAppendRecipientsWrapped}
                             profiles={profiles}
                             sharedPublic={sharedPublic}
+                            author={authorInPayload}
+                            postedBy={currentPostBy}
                             {...props.successComponentProps}
                         />
                     )
                 case 'error':
-                    return <Failed error={new Error(progress.error)} {...props.failedComponentProps} />
+                    return (
+                        <Failed
+                            error={new Error(progress.error)}
+                            author={authorInPayload}
+                            postedBy={currentPostBy}
+                            {...props.failedComponentProps}
+                        />
+                    )
                 case 'progress':
-                    return <Awaiting type={progress} {...props.waitingComponentProps} />
+                    return (
+                        <Awaiting
+                            type={progress}
+                            author={authorInPayload}
+                            postedBy={currentPostBy}
+                            {...props.waitingComponentProps}
+                        />
+                    )
                 default:
                     return null
             }

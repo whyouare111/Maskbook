@@ -12,7 +12,10 @@ import { PreDefinedVirtualGroupNames } from '../../../database/type'
 import { twitterUICustomUI, startWatchThemeColor } from './custom'
 import { notifyPermissionUpdate } from '../../../utils/permissions'
 import { injectMaskbookIconToProfile, injectMaskbookIconIntoFloatingProfileCard } from './injectMaskbookIcon'
+import { injectDashboardEntranceAtTwitter } from './injectDashboardEntrance'
+import { Flags } from '../../../utils/flags'
 
+const origins = [`${twitterUrl.hostLeadingUrl}/*`, `${twitterUrl.hostLeadingUrlMobile}/*`]
 export const instanceOfTwitterUI = defineSocialNetworkUI({
     ...sharedSettings,
     ...twitterUITasks,
@@ -49,15 +52,14 @@ export const instanceOfTwitterUI = defineSocialNetworkUI({
     shouldActivate(location: Location | URL = globalThis.location) {
         return location.hostname.endsWith(twitterUrl.hostIdentifier)
     },
-    friendlyName: 'Twitter (Insider Preview)',
+    friendlyName: 'Twitter',
+    hasPermission() {
+        return browser.permissions.contains({ origins })
+    },
     requestPermission() {
         // TODO: wait for webextension-shim to support <all_urls> in permission.
-        if (webpackEnv.target === 'WKWebview' || webpackEnv.target === 'E2E') return Promise.resolve(true)
-        return browser.permissions
-            .request({
-                origins: [`${twitterUrl.hostLeadingUrl}/*`, `${twitterUrl.hostLeadingUrlMobile}/*`],
-            })
-            .then(notifyPermissionUpdate)
+        if (Flags.no_web_extension_dynamic_permission_request) return Promise.resolve(true)
+        return browser.permissions.request({ origins }).then(notifyPermissionUpdate)
     },
     setupAccount: () => {
         instanceOfTwitterUI.requestPermission().then((granted) => {
@@ -70,4 +72,5 @@ export const instanceOfTwitterUI = defineSocialNetworkUI({
     ignoreSetupAccount() {
         setStorage(twitterUrl.hostIdentifier, { userIgnoredWelcome: true, forceDisplayWelcome: false }).then()
     },
+    injectDashboardEntrance: injectDashboardEntranceAtTwitter,
 })

@@ -1,9 +1,5 @@
 import * as c from '../crypto-alpha-38'
-import {
-    makeTypedMessageText,
-    TypedMessageComplex,
-    TypedMessageUnknown,
-} from '../../extension/background-script/CryptoServices/utils'
+import { makeTypedMessageText, TypedMessageCompound, TypedMessageUnknown } from '../../protocols/typed-message'
 import { encodeText, encodeArrayBuffer, decodeText } from '../../utils/type-transform/String-ArrayBuffer'
 import { recover_ECDH_256k1_KeyPair_ByMnemonicWord } from '../../utils/mnemonic-code'
 import { CryptoWorker } from '../../modules/workers'
@@ -51,19 +47,19 @@ test('Crypto alpha v38 Typed Message', () => {
     expect(c.typedMessageStringify(textWith1Meta)).toBe(text2)
     expect(c.typedMessageStringify(textWith2Meta)).toBe(text3)
 
-    expect(c.typedMessageParse(text1)).toStrictEqual(textWith0Meta)
-    expect(c.typedMessageParse(text2)).toStrictEqual(textWith1Meta)
-    expect(c.typedMessageParse(text3)).toStrictEqual(textWith2Meta)
+    expect(c.typedMessageParse('text', text1)).toStrictEqual(textWith0Meta)
+    expect(c.typedMessageParse('text', text2)).toStrictEqual(textWith1Meta)
+    expect(c.typedMessageParse('text', text3)).toStrictEqual(textWith2Meta)
 
     // Test inputs that v38 refuse to resolve
-    const complex: TypedMessageComplex = { type: 'complex', items: [textWith2Meta], version: 1 }
-    expect(() => c.typedMessageStringify(complex)).toThrow()
+    const compound: TypedMessageCompound = { type: 'compound', items: [textWith2Meta], version: 1 }
+    expect(() => c.typedMessageStringify(compound)).toThrow()
 
     const unk: TypedMessageUnknown = { type: 'unknown', version: 1 }
     expect(() => c.typedMessageStringify(unk)).toThrow()
 
     // Test bad style input
-    expect(c.typedMessageParse(`Non-metadata🧩text message`)).toMatchInlineSnapshot(`
+    expect(c.typedMessageParse('text', `Non-metadata🧩text message`)).toMatchInlineSnapshot(`
         Object {
           "content": "Non-metadata🧩text message",
           "meta": undefined,
@@ -117,19 +113,6 @@ c.encrypt1To1 && c.decryptMessage1To1
 c.encrypt1ToN && c.decryptMessage1To1 && c.decryptMessage1ToNByMyself && c.decryptMessage1ToNByOther
 // This function is not stable (it will generate a new iv every time)
 // test is in the ./1toN
-
-// Test for:
-c.verify && c.sign
-// TODO: ECDSA related test is skipped, see https://github.com/nodejs/webcrypto/issues/48
-test.skip('Crypto alpha v38 sign & verify', async () => {
-    const alice = await recover_ECDH_256k1_KeyPair_ByMnemonicWord('seed!', 'password!')
-    const bob = await recover_ECDH_256k1_KeyPair_ByMnemonicWord('Seed@', 'password@')
-    const message = 'aaaaaaaaaaaa'
-    const signature = 'zfDbfJy1n32SBBR6OYXVfHMZyJYqQfrpi+2F5xogtUJ2G8VtCuZBvI2LL9pzSCB1dbgeQ7NdUo2L5Goo/qBzbg=='
-    expect(c.sign(message, alice.key.privateKey).then(helper)).resolves.toBe(signature)
-    expect(c.verify(message, signature, alice.key.publicKey)).resolves.toBeTruthy()
-    expect(c.verify(message, signature, bob.key.publicKey)).resolves.toBeFalsy()
-})
 
 // Test for:
 c.publicSharedAESKey

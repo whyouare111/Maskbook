@@ -64,7 +64,7 @@ describe(`${SETUP_STORY_URL}-Workflow2:ConnectProfile`, () => {
             // dimiss dialogs
             await sns.dimissDialog(snsPage)
 
-            // wait maskbook inject immersive dialog
+            // wait maskbook inject setup guide
             await snsPage.waitFor(sns.setupGuideSelector)
 
             // validate username
@@ -76,25 +76,39 @@ describe(`${SETUP_STORY_URL}-Workflow2:ConnectProfile`, () => {
             // take screenshot
             await helpers.screenshot(snsPage, `${sns.name}_connect_1`)
 
-            // click the 'next' button
-            const nextButton = await snsPage.waitForFunction(
-                `document.querySelector('${sns.setupGuideSelector}').shadowRoot.querySelector('[data-testid="next_button"]')`,
+            // click the 'confirm' button
+            const confirmButton = await snsPage.waitForFunction(
+                `document.querySelector('${sns.setupGuideSelector}').shadowRoot.querySelector('[data-testid="confirm_button"]')`,
             )
-            await (nextButton as any).click()
+            await (confirmButton as any).click()
             await page.waitFor(500)
 
-            // redirect to profile page
-            await snsPage.waitFor(sns.profileSelector)
+            // click the 'done' button
+            await (confirmButton as any).click()
+            await page.waitFor(500)
 
-            // wait maskbook inject immersive dialog
+            // redirect to news feed page
+            await snsPage.waitFor(sns.composeEditorSelector)
+
+            // wait maskbook inject setup guide
             await snsPage.waitFor(sns.setupGuideSelector)
 
-            // validate prove bio
-            const proveTextarea = await snsPage.waitForFunction(
-                `document.querySelector('${sns.setupGuideSelector}').shadowRoot.querySelector('[data-testid="prove_textarea"]')`,
+            // click the 'create' button
+            const createButton = await snsPage.waitForFunction(
+                `document.querySelector('${sns.setupGuideSelector}').shadowRoot.querySelector('[data-testid="create_button"]')`,
             )
-            const proveContent = await proveTextarea.asElement()?.evaluate((e) => e.textContent)
-            expect(proveContent).toBeTruthy()
+            await (createButton as any).click()
+            await snsPage.waitFor(500)
+
+            // wait for maskbook inject post dialog modal
+            await snsPage.waitFor(sns.postDialogModalSelector)
+
+            // validate content of the compose dialog
+            const textTextarea = await snsPage.waitForFunction(
+                `document.querySelector('${sns.postDialogModalSelector}').shadowRoot.querySelector('[data-testid="text_textarea"]')`,
+            )
+            const textContent = textTextarea.asElement()?.evaluate((e) => e.textContent)
+            expect(textContent).toBeTruthy()
 
             // take screenshot
             await helpers.screenshot(snsPage, `${sns.name}_connect_2`)
@@ -102,48 +116,8 @@ describe(`${SETUP_STORY_URL}-Workflow2:ConnectProfile`, () => {
             // wait for UI update
             await snsPage.waitFor(500)
 
-            // listening 'dialog' event
-            await new Promise(async (resolve) => {
-                snsPage.on('dialog', async (dialog) => {
-                    // get prompt value
-                    const defaultValue = dialog.defaultValue()
-
-                    // dismiss dialog
-                    await snsPage.waitFor(500)
-                    await dialog.dismiss()
-
-                    // wait for auto pasting
-                    await snsPage.waitFor(2000)
-
-                    // auto pasting not working
-                    if (defaultValue.includes(proveContent!)) {
-                        resolve()
-                    } else {
-                        // get bio
-                        const descriptionTextarea = await snsPage.$(sns.bioTextareaSelector)
-                        if (!descriptionTextarea) return
-
-                        // validate bio
-                        const bio = await descriptionTextarea.evaluate((e) => (e as HTMLTextAreaElement).value)
-                        expect(bio?.includes(proveContent!)).toBeTruthy()
-                        resolve()
-                    }
-                })
-
-                // click the 'add it for me' button
-                const addButton = await snsPage.waitForFunction(
-                    `document.querySelector('${sns.setupGuideSelector}').shadowRoot.querySelector('[data-testid="add_button"]')`,
-                )
-                await (addButton as any).click()
-                await snsPage.waitFor(500)
-            })
-
-            // click the 'finish' button
-            await snsPage.waitFor(500)
-            const finishButton = await snsPage.waitForFunction(
-                `document.querySelector('${sns.setupGuideSelector}').shadowRoot.querySelector('[data-testid="add_button"]')`,
-            )
-            await (finishButton as any).click()
+            // click the 'done' button
+            await (createButton as any).click()
             await snsPage.waitFor(500)
 
             // take screenshot

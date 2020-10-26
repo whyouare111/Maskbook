@@ -15,7 +15,7 @@ import {
     consistentPersonaDBWriteAccess,
 } from '../../database/Persona/Persona.db'
 import { queryPersona } from '../../database'
-import { OnlyRunInContext } from '@holoflows/kit/es'
+import { OnlyRunInContext } from '@dimensiondev/holoflows-kit/es'
 import { BackupJSONFileLatest, UpgradeBackupJSONFile } from '../../utils/type-transform/BackupFormat/JSON/latest'
 import { restoreBackup } from './WelcomeServices/restoreBackup'
 import { restoreNewIdentityWithMnemonicWord } from './WelcomeService'
@@ -34,8 +34,14 @@ export { queryProfile, queryProfilePaged } from '../../database'
 export function queryProfiles(network?: string): Promise<Profile[]> {
     return queryProfilesWithQuery(network)
 }
-export function queryMyProfiles(network?: string) {
-    return queryProfilesWithQuery(network).then((x) => x.filter((y) => y.linkedPersona?.hasPrivateKey === true))
+export async function queryMyProfiles(network?: string) {
+    const myPersonas = (await queryMyPersonas(network)).filter((x) => !x.uninitialized)
+    return Promise.all(
+        myPersonas
+            .flatMap((x) => Array.from(x.linkedProfiles.keys()))
+            .filter((y) => !network || network === y.network)
+            .map(queryProfile),
+    )
 }
 export async function updateProfileInfo(
     identifier: ProfileIdentifier,

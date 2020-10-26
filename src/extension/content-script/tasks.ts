@@ -1,9 +1,9 @@
-import { AutomatedTabTask, GetContext, AutomatedTabTaskRuntimeOptions } from '@holoflows/kit'
+import { AutomatedTabTask, GetContext, AutomatedTabTaskRuntimeOptions } from '@dimensiondev/holoflows-kit'
 import { ProfileIdentifier, ECKeyIdentifier, Identifier } from '../../database/type'
 import {
     disableOpenNewTabInBackgroundSettings,
-    currentImmersiveSetupStatus,
-    ImmersiveSetupCrossContextStatus,
+    currentSetupGuideStatus,
+    SetupGuideCrossContextStatus,
 } from '../../settings/settings'
 import type { SocialNetworkUI } from '../../social-network/ui'
 import { memoizePromise } from '../../utils/memoize'
@@ -12,6 +12,7 @@ import Serialization from '../../utils/type-transform/Serialization'
 import { sideEffect } from '../../utils/side-effects'
 import { untilDocumentReady } from '../../utils/dom'
 import { sleep } from '../../utils/utils'
+import { Flags } from '../../utils/flags'
 
 function getActivatedUI() {
     return safeGetActiveUI()
@@ -24,11 +25,6 @@ const _tasks = {
      * Get Profile
      */
     getProfile: (identifier: ProfileIdentifier) => getActivatedUI().taskGetProfile(identifier),
-    /**
-     * Access profile page
-     * Paste text into bio
-     */
-    pasteIntoBio: async (text: string) => getActivatedUI().taskPasteIntoBio(text),
     /**
      * Access main page
      * Paste text into PostBox
@@ -47,8 +43,8 @@ const _tasks = {
         },
         (x) => x,
     ),
-    async immersiveSetup(for_: ECKeyIdentifier) {
-        getActivatedUI().taskStartImmersiveSetup(for_)
+    async SetupGuide(for_: ECKeyIdentifier) {
+        getActivatedUI().taskStartSetupGuide(for_)
     },
     async noop() {},
 }
@@ -91,7 +87,7 @@ export function exclusiveTasks(...args: Parameters<typeof realTasks>) {
         memorable: false,
         autoClose: false,
     }
-    if (webpackEnv.genericTarget !== 'facebookApp') return tasks(uri, { ...updatedOptions, ...options }, ...others)
+    if (!Flags.has_no_browser_tab_ui) return tasks(uri, { ...updatedOptions, ...options }, ...others)
     let _key: keyof typeof _tasks
     let _args: any[]
     async function p() {
@@ -126,15 +122,16 @@ export function exclusiveTasks(...args: Parameters<typeof realTasks>) {
 
 sideEffect.then(untilDocumentReady).then(() => {
     if (GetContext() !== 'content') return
+
+    //#region setup guide
     const network = getActivatedUI().networkIdentifier
-    const id = currentImmersiveSetupStatus[network].value
+    const id = currentSetupGuideStatus[network].value
     const onStatusUpdate = (id: string) => {
-        const status: ImmersiveSetupCrossContextStatus = JSON.parse(id || '{}')
-        if (status.persona && status.status === 'during') {
-            _tasks.immersiveSetup(Identifier.fromString(status.persona, ECKeyIdentifier).unwrap())
-        }
+        const { persona, status }: SetupGuideCrossContextStatus = JSON.parse(id || '{}')
+        if (persona && status) _tasks.SetupGuide(Identifier.fromString(persona, ECKeyIdentifier).unwrap())
     }
-    currentImmersiveSetupStatus[network].addListener(onStatusUpdate)
-    currentImmersiveSetupStatus[network].readyPromise.then(onStatusUpdate)
+    currentSetupGuideStatus[network].addListener(onStatusUpdate)
+    currentSetupGuideStatus[network].readyPromise.then(onStatusUpdate)
     onStatusUpdate(id)
+    //#endregion
 })

@@ -1,16 +1,12 @@
-import { OnlyRunInContext } from '@holoflows/kit'
+import { OnlyRunInContext } from '@dimensiondev/holoflows-kit'
 import { encodeText } from '../../utils/type-transform/String-ArrayBuffer'
 import { sleep, getUrl } from '../../utils/utils'
-import getCurrentNetworkWorker from '../../social-network/utils/getCurrentNetworkWorker'
-import type { SocialNetworkUI } from '../../social-network/ui'
-import { getWelcomePageURL } from '../options-page/Welcome/getWelcomePageURL'
 import { recover_ECDH_256k1_KeyPair_ByMnemonicWord } from '../../utils/mnemonic-code'
 import { createPersonaByJsonWebKey } from '../../database'
 import { attachProfileDB, LinkedProfileDetails } from '../../database/Persona/Persona.db'
 import { deriveLocalKeyFromECDHKey } from '../../utils/mnemonic-code/localKeyGenerate'
 import type { ProfileIdentifier, PersonaIdentifier } from '../../database/type'
 import { generateBackupJSON, BackupOptions } from './WelcomeServices/generateBackupJSON'
-import { i18n } from '../../utils/i18n-next'
 import { exclusiveTasks } from '../content-script/tasks'
 import type { AESJsonWebKey } from '../../modules/CryptoAlgorithm/interfaces/utils'
 import { saveAsFile } from './HelperService'
@@ -73,12 +69,6 @@ export async function createBackupFile(
     // Don't make the download pop so fast
     await sleep(1000)
     return downloadBackup(obj)
-}
-
-export async function openWelcomePage(id?: SocialNetworkUI['lastRecognizedIdentity']['value']) {
-    if (id && !getCurrentNetworkWorker(id.identifier).unwrap().isValidUsername(id.identifier.userId))
-        throw new TypeError(i18n.t('service_username_invalid'))
-    return exclusiveTasks(getWelcomePageURL())
 }
 
 export async function openOptionsPage(route?: DashboardRoute, search?: string) {

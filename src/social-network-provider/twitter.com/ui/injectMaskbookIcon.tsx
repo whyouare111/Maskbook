@@ -1,11 +1,13 @@
+import React from 'react'
+import { MutationObserverWatcher, DOMProxy, LiveSelector } from '@dimensiondev/holoflows-kit/es'
 import { bioPageUserNickNameSelector, floatingBioCardSelector, bioPageUserIDSelector } from '../utils/selector'
-import { MutationObserverWatcher, DOMProxy, LiveSelector } from '@holoflows/kit/es'
 import type { PostInfo } from '../../../social-network/PostInfo'
 import Services from '../../../extension/service'
 import { ProfileIdentifier } from '../../../database/type'
-import { MaskbookIcon } from '../../../resources/Maskbook-Circle-WhiteGraph-BlueBackground'
-import React from 'react'
-import { renderInShadowRoot } from '../../../utils/jss/renderInShadowRoot'
+import { MaskbookIcon } from '../../../resources/MaskbookIcon'
+import { renderInShadowRoot } from '../../../utils/shadow-root/renderInShadowRoot'
+import { memoizePromise } from '../../../utils/memoize'
+import { Flags } from '../../../utils/flags'
 
 function Icon(props: { size: number }) {
     return (
@@ -15,11 +17,12 @@ function Icon(props: { size: number }) {
                 height: props.size,
                 verticalAlign: 'text-bottom',
                 marginLeft: 6,
-            }}></MaskbookIcon>
+            }}
+        />
     )
 }
-const opt = { afterShadowRootInit: { mode: webpackEnv.shadowRootMode } } as const
-function _(main: () => LiveSelector<HTMLSpanElement, true>, size: number) {
+const opt = { afterShadowRootInit: { mode: Flags.using_ShadowDOM_attach_mode } } as const
+function _(main: () => LiveSelector<HTMLElement, true>, size: number) {
     // TODO: for unknown reason the MutationObserverWatcher doesn't work well
     // To reproduce, open a profile and switch to another profile.
     new MutationObserverWatcher(main())
@@ -58,7 +61,11 @@ export function injectMaskbookIconIntoFloatingProfileCard() {
 }
 export function injectMaskbookIconToPost(post: PostInfo) {
     const ls = new LiveSelector([post.rootNodeProxy])
-        .map((x) => x.current.parentElement?.parentElement?.previousElementSibling?.querySelector('span'))
+        .map((x) =>
+            x.current.parentElement?.parentElement?.previousElementSibling?.querySelector<HTMLDivElement>(
+                'a[role="link"] > div > div:first-child',
+            ),
+        )
         .enableSingleMode()
     ifUsingMaskbook(post.postBy.value).then(add, remove)
     post.postBy.addListener((x) => ifUsingMaskbook(x).then(add, remove))
@@ -77,6 +84,8 @@ export function injectMaskbookIconToPost(post: PostInfo) {
         remover()
     }
 }
-function ifUsingMaskbook(pid: ProfileIdentifier) {
-    return Services.Identity.queryProfile(pid).then((x) => (!!x.linkedPersona ? Promise.resolve() : Promise.reject()))
-}
+const ifUsingMaskbook = memoizePromise(
+    (pid: ProfileIdentifier) =>
+        Services.Identity.queryProfile(pid).then((x) => (!!x.linkedPersona ? Promise.resolve() : Promise.reject())),
+    (pid: ProfileIdentifier) => pid.toText(),
+)

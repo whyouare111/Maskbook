@@ -1,6 +1,6 @@
 import React from 'react'
 import { storiesOf } from '@storybook/react'
-import { text, boolean, select, radios } from '@storybook/addon-knobs'
+import { text, boolean, select, radios, number } from '@storybook/addon-knobs'
 import { action } from '@storybook/addon-actions'
 import { AdditionalContent, AdditionalIcon } from '../components/InjectedComponents/AdditionalPostContent'
 import { DecryptPostFailed } from '../components/InjectedComponents/DecryptedPost/DecryptPostFailed'
@@ -14,41 +14,37 @@ import { demoPeople as demoProfiles, demoGroup } from './demoPeopleOrGroups'
 import { PostCommentDecrypted } from '../components/InjectedComponents/PostComments'
 import { CommentBox } from '../components/InjectedComponents/CommentBox'
 import type { DecryptionProgress } from '../extension/background-script/CryptoServices/decryptFrom'
-import { PersonOrGroupInChip, PersonOrGroupInList } from '../components/shared/SelectPeopleAndGroups'
-import { MaskbookLightTheme } from '../utils/theme'
-import { PostDialog } from '../components/InjectedComponents/PostDialog'
+import { ProfileOrGroupInChip, ProfileOrGroupInList } from '../components/shared/SelectPeopleAndGroups'
+import { useMaskbookTheme } from '../utils/theme'
+import { CharLimitIndicator, PostDialog } from '../components/InjectedComponents/PostDialog'
 import { PostDialogHint } from '../components/InjectedComponents/PostDialogHint'
 import {
     makeTypedMessageText,
-    TypedMessageText,
-    TypedMessageUnknown,
-    TypedMessageComplex,
-} from '../extension/background-script/CryptoServices/utils'
-import {
-    DefaultTypedMessageTextRenderer,
-    DefaultTypedMessageComplexRenderer,
-    DefaultTypedMessageUnknownRenderer,
-} from '../components/InjectedComponents/TypedMessageRenderer'
+    makeTypedMessageFromList,
+    makeTypedMessageUnknown,
+    makeTypedMessageSuspended,
+} from '../protocols/typed-message'
+import { DefaultTypedMessageRenderer } from '../components/InjectedComponents/TypedMessageRenderer'
 import { useTwitterThemedPostDialogHint } from '../social-network-provider/twitter.com/ui/injectPostDialogHint'
-import { useTwitterButton } from '../social-network-provider/twitter.com/utils/theme'
 import { TwitterThemeProvider } from '../social-network-provider/twitter.com/ui/custom'
-import { PersonKnownSelf } from '../components/InjectedComponents/PersonKnown'
 import { figmaLink } from './utils'
-import type { RedPacketMetadata } from '../plugins/Wallet/database/types'
-import { RedPacketMetaKey } from '../plugins/Wallet/RedPacketMetaKey'
+import { RedPacketMetaKey } from '../plugins/RedPacket/constants'
+import type { RedPacketJSONPayload } from '../plugins/RedPacket/types'
+import type { TypedMessageStorybookTest } from '../plugins/Storybook/define'
+import { ProfileIdentifier } from '../database/type'
 
 storiesOf('Injections', module)
     .add('PersonOrGroupInChip', () => (
         <>
             {demoGroup.map((g) => (
-                <PersonOrGroupInChip item={g} />
+                <ProfileOrGroupInChip item={g} />
             ))}
         </>
     ))
     .add('PersonOrGroupInList', () => (
         <Paper>
             {demoGroup.map((g) => (
-                <PersonOrGroupInList onClick={action('click')} item={g} />
+                <ProfileOrGroupInList onClick={action('click')} item={g} />
             ))}
         </Paper>
     ))
@@ -71,29 +67,37 @@ storiesOf('Injections', module)
         figmaLink('https://www.figma.com/file/TCHH8gXbhww88I5tHwHOW9/tweet-details?node-id=0%3A1'),
     )
     .add('Typed Message Renderer', () => {
-        const _text: TypedMessageText = {
-            type: 'text',
-            version: 1,
-            content: text('DefaultTypedMessageTextRenderer', 'text'),
-        }
-        const unknown: TypedMessageUnknown = { type: 'unknown', version: 1 }
-        const complex: TypedMessageComplex = {
-            type: 'complex',
-            version: 1,
-            items: [_text, unknown],
-        }
-        const divider = <Divider style={{ marginTop: 24 }} />
+        const _text = makeTypedMessageText(text('DefaultTypedMessageTextRenderer', 'text'))
+        const unknown = makeTypedMessageUnknown()
+        const compound = makeTypedMessageFromList(_text, unknown)
+        const suspended = makeTypedMessageSuspended(
+            (async function () {
+                await sleep(2000)
+                return makeTypedMessageText('Resolved text!')
+            })(),
+        )
+        const plugin: TypedMessageStorybookTest = { payload: text('Plugin payload', 'test'), type: 'test', version: 1 }
         return (
             <>
                 <Paper>
-                    <Typography>DefaultTypedMessageTextRenderer</Typography>
-                    <DefaultTypedMessageTextRenderer message={_text} />
-                    {divider}
-                    <Typography>DefaultTypedMessageComplexRenderer</Typography>
-                    <DefaultTypedMessageComplexRenderer message={complex} />
-                    {divider}
-                    <Typography>DefaultTypedMessageUnknownRenderer</Typography>
-                    <DefaultTypedMessageUnknownRenderer message={unknown} />
+                    <Typography>Text</Typography>
+                    <DefaultTypedMessageRenderer message={_text} />
+                </Paper>
+                <Paper style={{ marginTop: 24 }}>
+                    <Typography>Compound</Typography>
+                    <DefaultTypedMessageRenderer message={compound} />
+                </Paper>
+                <Paper style={{ marginTop: 24 }}>
+                    <Typography>Unknown</Typography>
+                    <DefaultTypedMessageRenderer message={unknown} />
+                </Paper>
+                <Paper style={{ marginTop: 24 }}>
+                    <Typography>Suspended</Typography>
+                    <DefaultTypedMessageRenderer message={suspended} />
+                </Paper>
+                <Paper style={{ marginTop: 24 }}>
+                    <Typography>Custom(Plugin renderer)</Typography>
+                    <DefaultTypedMessageRenderer message={plugin} />
                 </Paper>
             </>
         )
@@ -122,7 +126,6 @@ storiesOf('Injections', module)
 
         Hello world!`,
             )
-            const vr = boolean('Verified', true)
             enum ProgressType {
                 finding_person_public_key,
                 finding_post_key,
@@ -133,22 +136,23 @@ storiesOf('Injections', module)
             function getProgress(x: ProgressType): DecryptionProgress | undefined {
                 switch (x) {
                     case ProgressType.finding_person_public_key:
-                        return { progress: 'finding_person_public_key', type: 'progress' }
+                        return { progress: 'finding_person_public_key', type: 'progress', internal: false }
                     case ProgressType.finding_post_key:
-                        return { progress: 'finding_post_key', type: 'progress' }
+                        return { progress: 'finding_post_key', type: 'progress', internal: false }
                     case ProgressType.init:
-                        return { progress: 'init', type: 'progress' }
+                        return { progress: 'init', type: 'progress', internal: false }
                     case ProgressType.intermediate_success:
                         return {
                             progress: 'intermediate_success',
                             type: 'progress',
                             data: {
                                 content: makeTypedMessageText(msg),
-                                signatureVerifyResult: vr,
                                 rawContent: '',
                                 through: [],
                                 type: 'success',
+                                internal: false,
                             },
+                            internal: false,
                         }
                     case ProgressType.undefined:
                         return undefined
@@ -167,6 +171,9 @@ storiesOf('Injections', module)
                     ProgressType.undefined,
                 ),
             )
+            const displayAuthorMismatchTip = boolean('Author mismatch', true)
+            const author = displayAuthorMismatchTip ? new ProfileIdentifier('test', '$username') : void 0
+            const postBy = displayAuthorMismatchTip ? new ProfileIdentifier('test', 'id2') : void 0
             return (
                 <>
                     <FakePost title="Decrypted:">
@@ -174,14 +181,16 @@ storiesOf('Injections', module)
                             alreadySelectedPreviously={[]}
                             requestAppendRecipients={async () => {}}
                             profiles={demoProfiles}
-                            data={{ content: makeTypedMessageText(msg), signatureVerifyResult: vr }}
+                            data={{ content: makeTypedMessageText(msg) }}
+                            author={author}
+                            postedBy={postBy}
                         />
                     </FakePost>
                     <FakePost title="Decrypting:">
-                        <DecryptPostAwaiting type={progress} />
+                        <DecryptPostAwaiting type={progress} author={author} postedBy={postBy} />
                     </FakePost>
                     <FakePost title="Failed:">
-                        <DecryptPostFailed error={new Error('Error message')} />
+                        <DecryptPostFailed error={new Error('Error message')} author={author} postedBy={postBy} />
                     </FakePost>
                 </>
             )
@@ -208,10 +217,6 @@ storiesOf('Injections', module)
     })
     .add('Comment box', () => {
         return <CommentBox onSubmit={action('submit')} />
-    })
-    .add('Person Known', () => {
-        const bio = text('Bio', '__bio__content__')
-        return <PersonKnownSelf bio={bio} />
     })
     .add(
         'Post Dialog',
@@ -263,14 +268,15 @@ storiesOf('Injections', module)
             </>
         )
         function TwitterFlavorPostDialogHint() {
-            const style = { ...useTwitterThemedPostDialogHint(), ...useTwitterButton() }
+            const style = { ...useTwitterThemedPostDialogHint() }
             return <PostDialogHint classes={style} onHintButtonClicked={action('clicked')} />
         }
     })
+    .add('CharLimitIndicator', () => <CharLimitIndicator max={number('max', 560)} value={number('current', 530)} />)
 
 function FakePost(props: React.PropsWithChildren<{ title: string }>) {
     return (
-        <MuiThemeProvider theme={MaskbookLightTheme}>
+        <MuiThemeProvider theme={useMaskbookTheme()}>
             {props.title}
             <div style={{ marginBottom: '2em', maxWidth: 500 }}>
                 <img width={500} src={require('./post-a.jpg')} style={{ marginBottom: -12 }} />
@@ -289,7 +295,7 @@ function FakePost(props: React.PropsWithChildren<{ title: string }>) {
     )
 }
 
-const redpacket: RedPacketMetadata = {
+const redpacket: RedPacketJSONPayload = {
     contract_address: 'addr',
     contract_version: 1,
     creation_time: Date.now(),

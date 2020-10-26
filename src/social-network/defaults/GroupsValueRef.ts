@@ -1,21 +1,30 @@
 import Services from '../../extension/service'
 import type { SocialNetworkUI } from '../ui'
-import type { ValueRef } from '@holoflows/kit/es'
+import type { ValueRef } from '@dimensiondev/holoflows-kit/es'
 import type { Group } from '../../database'
 import { GroupIdentifier, PreDefinedVirtualGroupNames, ProfileIdentifier } from '../../database/type'
 import { createDataWithIdentifierChangedListener } from './createDataWithIdentifierChangedListener'
 import { MessageCenter } from '../../utils/messages'
+import { debounce } from 'lodash-es'
+import { enableGroupSharingSettings } from '../../settings/settings'
 
 // TODO:
 // groupIDs can be a part of network definitions
-export function InitGroupsValueRef(
+export async function InitGroupsValueRef(
     self: SocialNetworkUI,
     network: string,
     groupIDs: string[] = [PreDefinedVirtualGroupNames.friends],
 ) {
-    create(network, self.groupsRef, groupIDs)
-    MessageCenter.on('identityCreated', () => create(network, self.groupsRef, groupIDs))
-    MessageCenter.on('joinGroup', ({ group, newMembers }) => join(group, self.groupsRef, newMembers))
+    if (!(await enableGroupSharingSettings.readyPromise)) return
+    const debouncedCreate = debounce(create, 1000, {
+        trailing: true,
+    })
+    const debouncedJoin = debounce(join, 1000, {
+        trailing: true,
+    })
+    debouncedCreate(network, self.groupsRef, groupIDs)
+    MessageCenter.on('identityCreated', () => debouncedCreate(network, self.groupsRef, groupIDs))
+    MessageCenter.on('joinGroup', ({ group, newMembers }) => debouncedJoin(group, self.groupsRef, newMembers))
     MessageCenter.on(
         'groupsChanged',
         createDataWithIdentifierChangedListener(self.groupsRef, (x) => x.of.identifier.network === network),

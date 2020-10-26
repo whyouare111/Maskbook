@@ -1,7 +1,7 @@
 import { encode, decode } from '@dimensiondev/stego-js/cjs/dom'
 import { GrayscaleAlgorithm } from '@dimensiondev/stego-js/cjs/grayscale'
 import { TransformAlgorithm } from '@dimensiondev/stego-js/cjs/transform'
-import { OnlyRunInContext } from '@holoflows/kit/es'
+import { OnlyRunInContext } from '@dimensiondev/holoflows-kit/es'
 import type { EncodeOptions, DecodeOptions } from '@dimensiondev/stego-js/cjs/stego'
 import { getUrl, downloadUrl } from '../../utils/utils'
 import { memoizePromise } from '../../utils/memoize'
@@ -47,7 +47,10 @@ const defaultOptions = {
 const isSameDimension = (dimension: Dimension, otherDimension: Dimension) =>
     dimension.width === otherDimension.width && dimension.height === otherDimension.height
 
-const getMaskBuf = memoizePromise((type: Mask) => downloadUrl(getUrl(`/image-payload/mask-${type}.png`)), undefined)
+const getMaskBuf = memoizePromise(
+    async (type: Mask) => (await downloadUrl(getUrl(`/image-payload/mask-${type}.png`))).arrayBuffer(),
+    undefined,
+)
 
 type EncodeImageOptions = {
     template?: Template
@@ -84,9 +87,5 @@ export async function decodeImage(buf: string | ArrayBuffer, options: DecodeImag
 }
 
 export async function decodeImageUrl(url: string, options: DecodeImageOptions) {
-    return decodeImage(await downloadUrl(url), options)
-}
-
-export function downloadImage({ buffer }: Uint8Array) {
-    return saveAsFile(buffer, 'image/png', 'maskbook.png')
+    return decodeImage(await (await downloadUrl(url)).arrayBuffer(), options)
 }

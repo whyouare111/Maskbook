@@ -12,15 +12,15 @@ import { useSWRInfinite } from 'swr'
 import Services from '../../service'
 import type { Profile } from '../../../database'
 import { last } from 'lodash-es'
-import { useModal } from '../Dialogs/Base'
-import { DashboardContactSearchDialog } from '../Dialogs/Contact'
+import { useModal } from '../DashboardDialogs/Base'
+import { DashboardContactSearchDialog } from '../DashboardDialogs/Contact'
 
 const useStyles = makeStyles((theme) =>
     createStyles({
         title: {
             margin: theme.spacing(3, 0),
             color: theme.palette.text.secondary,
-            [theme.breakpoints.down('xs')]: {
+            [theme.breakpoints.down('sm')]: {
                 margin: theme.spacing(2, 0),
             },
         },
@@ -31,7 +31,7 @@ const useStyles = makeStyles((theme) =>
         },
         list: {
             flex: 1,
-            [theme.breakpoints.down('xs')]: {
+            [theme.breakpoints.down('sm')]: {
                 marginLeft: theme.spacing(-2),
                 marginRight: theme.spacing(-2),
             },
@@ -39,7 +39,7 @@ const useStyles = makeStyles((theme) =>
     }),
 )
 
-const fetcher = (key: number, size: number, search: string, offset?: Profile) =>
+const fetcher = (search: string, offset?: Profile) =>
     Services.Identity.queryProfilePaged(
         {
             // undefined will fetch the first page
@@ -61,7 +61,7 @@ export default function DashboardContactsRouter() {
     const actions = useMemo(
         () => [
             <TextField
-                placeholder="Search…"
+                placeholder={t('search')}
                 variant="outlined"
                 size="small"
                 value={searchUI}
@@ -81,16 +81,14 @@ export default function DashboardContactsRouter() {
         [search, searchUI, startSearchTransition],
     )
     const swr = useSWRInfinite<Profile[]>(
-        (size, previosuPageData) => [
-            search ? `profile:${search}:${size}` : `profile:${size}`,
-            size,
+        (_size, previousPageData) => [
             search || undefined, // undefined means fetch from start
-            last(previosuPageData),
+            last(previousPageData),
         ],
         fetcher,
     )
 
-    const { data, size, setSize, revalidate } = swr
+    const { data, size, setSize, mutate } = swr
     const isEmpty = data?.[0]?.length === 0
     const isReachingEnd = data && data[data.length - 1]?.length < 20
     const items = data ? ([] as Profile[]).concat(...data) : []
@@ -133,11 +131,11 @@ export default function DashboardContactsRouter() {
                             {({ index, style }) =>
                                 items[index] ? (
                                     <ContactLine
-                                        style={style}
+                                        style={style as any}
                                         key={index}
                                         contact={items[index]}
-                                        onUpdated={revalidate}
-                                        onDeleted={revalidate}
+                                        onUpdated={mutate}
+                                        onDeleted={mutate}
                                     />
                                 ) : null
                             }

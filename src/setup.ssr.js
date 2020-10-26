@@ -1,3 +1,4 @@
+const EventTarget = { addEventListener() {} }
 globalThis.location = { hostname: 'localhost' }
 globalThis.navigator = { appVersion: '', userAgent: '', language: '', platform: 'ssr' }
 globalThis.document = {
@@ -6,12 +7,16 @@ globalThis.document = {
     createElement() {
         return {
             attachShadow() {
-                return { addEventListener() {} }
+                return EventTarget
             },
         }
     },
     body: { appendChild() {} },
-    addEventListener() {},
+    ...EventTarget,
+    documentElement: {
+        onmouseenter() {},
+    },
+    readyState: 'loading',
 }
 globalThis.CSSStyleSheet = { name: 'CSSStyleSheet' }
 globalThis.ShadowRoot = class {}
@@ -19,18 +24,16 @@ globalThis.Event = class {
     get target() {}
 }
 globalThis.Worker = class {}
-globalThis.webpackEnv = {}
 globalThis.sessionStorage = {}
+globalThis.matchMedia = () => {
+    return { matches: false, ...EventTarget }
+}
 
 const { join } = require('path')
 const { writeFileSync, readFileSync, unlinkSync } = require('fs')
 
 const restoreLodash = modifyPackage('lodash-es', (x) => (x.main = '../lodash'))
-const restoreTSResult = modifyPackage('ts-results', (x) => {
-    x.main = './cjs.cjs'
-})
-const undoTSResult = compileToCJS('../node_modules/ts-results/index.js', '../node_modules/ts-results/cjs.cjs')
-const restoreKit = modifyPackage('@holoflows/kit', (x) => {
+const restoreKit = modifyPackage('@dimensiondev/holoflows-kit', (x) => {
     x.exports = {
         '.': './umd/index.js',
         './es/util/sleep': './umd/index.js',
@@ -38,7 +41,6 @@ const restoreKit = modifyPackage('@holoflows/kit', (x) => {
         './package.json': './package.json',
     }
 })
-
 process.on('uncaughtException', function (err) {
     cleanup()
     throw err
@@ -50,8 +52,6 @@ process.on('unhandledRejection', (err) => {
 function cleanup() {
     restoreLodash()
     restoreKit()
-    undoTSResult()
-    restoreTSResult()
 }
 try {
     require('ts-node').register({
@@ -59,6 +59,9 @@ try {
         transpileOnly: true,
         // ignore: [],
     })
+    globalThis.window = globalThis
+    require('./polyfill/index')
+    delete globalThis.window
     module.exports = require(process.argv[process.argv.length - 1])
 } finally {
     cleanup()

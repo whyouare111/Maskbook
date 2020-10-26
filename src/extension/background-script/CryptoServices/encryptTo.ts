@@ -6,11 +6,11 @@ import { queryPrivateKey, queryLocalKey } from '../../../database'
 import { ProfileIdentifier, PostIVIdentifier, GroupIdentifier } from '../../../database/type'
 import { prepareRecipientDetail } from './prepareRecipientDetail'
 import { getNetworkWorker } from '../../../social-network/worker'
-import { getSignablePayload, TypedMessage } from './utils'
 import { createPostDB } from '../../../database/post'
 import { queryPersonaByProfileDB } from '../../../database/Persona/Persona.db'
 import { compressSecp256k1Key } from '../../../utils/type-transform/SECP256k1-Compression'
 import { i18n } from '../../../utils/i18n-next'
+import type { TypedMessage } from '../../../protocols/typed-message'
 
 type EncryptedText = string
 type OthersAESKeyEncryptedToken = string
@@ -67,14 +67,14 @@ export async function encryptTo(
         signature: '',
         sharedPublic: publicShared,
         version: -38,
+        authorUserID: whoAmI,
     }
     try {
         const publicKey = (await queryPersonaByProfileDB(whoAmI))?.publicKey
         if (publicKey) payload.authorPublicKey = compressSecp256k1Key(publicKey, 'public')
     } catch (e) {}
 
-    const payloadWaitToSign = getSignablePayload(payload)
-    payload.signature = encodeArrayBuffer(await Alpha38.sign(payloadWaitToSign, minePrivateKey))
+    payload.signature = '_'
 
     await createPostDB({
         identifier: new PostIVIdentifier(whoAmI.network, payload.iv),
